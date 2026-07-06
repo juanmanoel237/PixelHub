@@ -1,0 +1,26 @@
+{
+  "network": {
+    "controllers": [
+      {
+        "ip": "192.168.1.45",
+        "startUniverse": 0
+      },
+      {
+        "ip": "192.168.1.46",
+        "startUniverse": 32
+      },
+      {
+        "ip": "192.168.1.47",
+        "startUniverse": 64
+      },
+      {
+        "ip": "192.168.1.48",
+        "startUniverse": 96
+      }
+    ],
+    "eHubPort": 9000
+  },
+  "mapping": {
+    "ledCount": 16576
+  }
+}
