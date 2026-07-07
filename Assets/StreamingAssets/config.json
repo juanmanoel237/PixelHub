@@ -3,24 +3,21 @@
     "controllers": [
       {
         "ip": "192.168.1.45",
-        "startUniverse": 0
-      },
-      {
-        "ip": "192.168.1.46",
-        "startUniverse": 32
-      },
-      {
-        "ip": "192.168.1.47",
-        "startUniverse": 64
-      },
-      {
-        "ip": "192.168.1.48",
-        "startUniverse": 96
+        "startUniverse": 0,
+        "universeCount": 386
       }
     ],
-    "eHubPort": 9000
+    "eHubPort": 9000,
+    "artNetPort": 6454
   },
   "mapping": {
-    "ledCount": 16576
+    "ledCount": 65536,
+    "screenWidth": 256,
+    "screenHeight": 256,
+    "pixelOrder": "RGB",
+    "channelsPerLed": 3,
+    "serpentine": true,
+    "strips": [],
+    "lyres": []
   }
 }
