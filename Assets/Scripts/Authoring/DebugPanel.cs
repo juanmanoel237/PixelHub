@@ -29,6 +29,7 @@ namespace Laps.Authoring
         [SerializeField] private bool  _fakeStateActive;
         [SerializeField] private Color _fakeColor = Color.red;
         [SerializeField] private EffectType _fakeEffect = EffectType.SolidColor;
+        [SerializeField] private bool _firstLedOnly = false; // true = comme send-artnet.js (1ère LED seulement)
 
         // ── Références internes ──────────────────────────────────
         private RoutingEngine _routingEngine;
@@ -85,6 +86,15 @@ namespace Laps.Authoring
         {
             if (!_fakeStateActive || _fakeState == null) return;
 
+            // Mode "comme le prof" : une seule LED (canaux DMX 1-3)
+            if (_firstLedOnly)
+            {
+                for (int i = 0; i < _fakeState.Length; i++)
+                    _fakeState[i] = Color.black;
+                _fakeState[0] = _fakeColor;
+                return;
+            }
+
             float t = Time.time;
             var p = new EffectParameters
             {
@@ -94,11 +104,21 @@ namespace Laps.Authoring
             EffectLibrary.Evaluate(_fakeEffect, t, _screenWidth, _screenHeight, p, _fakeState);
         }
 
+        /// <summary>Test minimal : allume uniquement la 1ère LED (comme send-artnet.js).</summary>
+        public void SendFirstLedTest(Color color)
+        {
+            _fakeColor = color;
+            _firstLedOnly = true;
+            _fakeStateActive = true;
+            Debug.Log($"[DebugPanel] Test 1ère LED : {color}");
+        }
+
         /// <summary>Remplit tout l'écran d'une couleur de test.</summary>
         public void SendTestColor(Color color)
         {
             _fakeColor = color;
             _fakeEffect = EffectType.SolidColor;
+            _firstLedOnly = false;
             _fakeStateActive = true;
             Debug.Log($"[DebugPanel] Couleur test envoyée : {color}");
         }
@@ -107,6 +127,7 @@ namespace Laps.Authoring
         public void SendBlackOut()
         {
             _fakeEffect = EffectType.BlackOut;
+            _firstLedOnly = false;
             _fakeStateActive = true;
             UpdateFakeState();
         }

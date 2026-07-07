@@ -233,11 +233,13 @@ namespace Laps.Routing
                 }
             }
 
-            // ── 4. Envoyer les paquets ArtNet ────────────────
+            // ── 4. Envoyer les paquets ArtNet (uniquement les univers non vides) ─
             foreach (var kvp in _dmxBuffers)
             {
                 int universe = kvp.Key;
                 byte[] dmxData = kvp.Value;
+
+                if (!HasNonZeroData(dmxData)) continue;
 
                 // Trouver le contrôleur responsable de cet univers
                 string ip = FindControllerIp(universe, config);
@@ -245,6 +247,13 @@ namespace Laps.Routing
 
                 _artNetSender.SendUniverse(ip, universe, dmxData);
             }
+        }
+
+        private static bool HasNonZeroData(byte[] dmxData)
+        {
+            for (int i = 0; i < dmxData.Length; i++)
+                if (dmxData[i] != 0) return true;
+            return false;
         }
 
         // ── Helpers ────────────────────────────────────────────

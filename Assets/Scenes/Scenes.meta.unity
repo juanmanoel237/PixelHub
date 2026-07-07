@@ -318,6 +318,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1599240897}
   - component: {fileID: 1599240896}
+  - component: {fileID: 1599240898}
   m_Layer: 0
   m_Name: PixelHub
   m_TagString: Untagged
@@ -337,6 +338,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 035403132599c4e1c8988b36088b8fd8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Laps.Core::Laps.Core.ConfigManager
+--- !u!114 &1599240898
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1599240895}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 90d169c7e714d48f6a337be1c00c2ced, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Laps.Bootstrap::PixelHubBootstrapper
+  _configManager: {fileID: 1599240896}
+  _routingEngine: {fileID: 0}
+  _showTimeline: {fileID: 0}
+  _debugPanel: {fileID: 0}
+  _startMode: 0
 --- !u!4 &1599240897
 Transform:
   m_ObjectHideFlags: 0

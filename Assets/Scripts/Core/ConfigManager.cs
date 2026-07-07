@@ -150,7 +150,7 @@ namespace Laps.Core
                     {
                         // Un seul contrôleur couvre tous les univers 0-385
                         // (65 536 LEDs ÷ 170 LEDs/univers = 386 univers)
-                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 0, universeCount = 386 }
+                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 1, universeCount = 386 }
                     },
                     eHubPort = 9000,
                     artNetPort = 6454

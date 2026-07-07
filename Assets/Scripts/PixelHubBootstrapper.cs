@@ -22,14 +22,24 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
 
+    private LedPreviewOverlay _previewOverlay;
+
     [Header("Mode de démarrage")]
     [SerializeField] private StartMode _startMode = StartMode.Timeline;
+
+    private StartMode _currentMode;
 
     public enum StartMode
     {
         Timeline,    // Authoring classique via ShowTimeline
         Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
         Manual       // L'utilisateur choisit via l'UI
+    }
+
+    private void Awake()
+    {
+        // Auto-câblage si la scène n'a que ConfigManager (cas actuel du projet)
+        EnsureComponents();
     }
 
     private void Start()
@@ -49,25 +59,81 @@ public class PixelHubBootstrapper : MonoBehaviour
         {
             case StartMode.Timeline:
                 _showTimeline.LoadShow();
-                _showTimeline.Play(); // Démarre la lecture automatiquement
+                _showTimeline.Play();
                 _routingEngine.SetStateProvider(_showTimeline);
+                _currentMode = StartMode.Timeline;
                 Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
                 break;
 
             case StartMode.Debug:
                 _routingEngine.SetStateProvider(_debugPanel);
                 _debugPanel.SetFakeStateActive(true);
+                _currentMode = StartMode.Debug;
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
                 break;
 
             case StartMode.Manual:
+                _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
         }
 
         // Démarrer le thread de routage
         _routingEngine.StartRouting();
+
+        // Prévisualisation à l'écran (onglet Game)
+        _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
+        _previewOverlay.Init(_routingEngine);
+        UpdatePreviewProvider();
+
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline");
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.T))
+            SwitchToTimeline();
+        else if (Input.GetKeyDown(KeyCode.D))
+            SwitchToDebug();
+        else if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            SwitchToDebug();
+            _debugPanel?.SendFirstLedTest(Color.red);
+            _previewOverlay?.SetProvider(_debugPanel, "Debug — 1ère LED rouge");
+        }
+        else if (Input.GetKeyDown(KeyCode.R))
+        {
+            SwitchToDebug();
+            _debugPanel?.SendTestColor(Color.red);
+        }
+        else if (Input.GetKeyDown(KeyCode.G))
+        {
+            SwitchToDebug();
+            _debugPanel?.SendTestColor(Color.green);
+        }
+        else if (Input.GetKeyDown(KeyCode.B))
+        {
+            SwitchToDebug();
+            _debugPanel?.SendTestColor(Color.blue);
+        }
+        else if (Input.GetKeyDown(KeyCode.Alpha0))
+        {
+            SwitchToDebug();
+            _debugPanel?.SendBlackOut();
+        }
+    }
+
+    private void EnsureComponents()
+    {
+        if (_configManager == null)
+            _configManager = FindObjectOfType<ConfigManager>() ?? gameObject.AddComponent<ConfigManager>();
+        if (_routingEngine == null)
+            _routingEngine = GetComponent<RoutingEngine>() ?? gameObject.AddComponent<RoutingEngine>();
+        if (_showTimeline == null)
+            _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
+        if (_debugPanel == null)
+            _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -75,8 +141,13 @@ public class PixelHubBootstrapper : MonoBehaviour
     public void SwitchToTimeline()
     {
         _routingEngine.StopRoutingThread();
+        _showTimeline.LoadShow();
+        _showTimeline.Play();
         _routingEngine.SetStateProvider(_showTimeline);
         _routingEngine.StartRouting();
+        _currentMode = StartMode.Timeline;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
     }
 
     public void SwitchToDebug()
@@ -85,6 +156,18 @@ public class PixelHubBootstrapper : MonoBehaviour
         _debugPanel.SetFakeStateActive(true);
         _routingEngine.SetStateProvider(_debugPanel);
         _routingEngine.StartRouting();
+        _currentMode = StartMode.Debug;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
+    }
+
+    private void UpdatePreviewProvider()
+    {
+        if (_previewOverlay == null) return;
+        if (_currentMode == StartMode.Timeline)
+            _previewOverlay.SetProvider(_showTimeline, "Timeline — le continent");
+        else if (_currentMode == StartMode.Debug)
+            _previewOverlay.SetProvider(_debugPanel, "Debug");
     }
 
     public void PlayShow()    => _showTimeline?.Play();

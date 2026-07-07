@@ -78,28 +78,37 @@ namespace Laps.Core
                     physicalIndex = ledIndex;
                 }
 
-                int universe = physicalIndex / ledsPerUniverse;          // Univers absolu
-                int channel  = (physicalIndex % ledsPerUniverse) * ChannelsPerLed; // Canal dans l'univers
+                int universeSlot = physicalIndex / ledsPerUniverse; // 0, 1, 2… dans l'installation
+                int channel      = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
 
-                // Trouver le contrôleur qui gère cet univers
-                int ctrlIndex = FindControllerForUniverse(network.controllers, universe);
+                // Univers Art-Net absolu = startUniverse + slot (comme send-artnet.js UNIVERSE=1)
+                int ctrlIndex = FindControllerForUniverseSlot(network.controllers, universeSlot);
+                int absoluteUniverse = ctrlIndex >= 0
+                    ? network.controllers[ctrlIndex].startUniverse + universeSlot
+                    : -1;
 
                 PixelMap[ledIndex] = new LEDAddress
                 {
                     controllerIndex = ctrlIndex,
-                    universe = universe,
+                    universe = absoluteUniverse,
                     channel = channel
                 };
 
                 // Enregistrer dans le mapping inversé
-                if (ctrlIndex >= 0)
+                if (ctrlIndex >= 0 && absoluteUniverse >= 0)
                 {
                     if (!ControllerUniverses.ContainsKey(ctrlIndex))
                         ControllerUniverses[ctrlIndex] = new List<int>();
 
-                    if (!ControllerUniverses[ctrlIndex].Contains(universe))
-                        ControllerUniverses[ctrlIndex].Add(universe);
+                    if (!ControllerUniverses[ctrlIndex].Contains(absoluteUniverse))
+                        ControllerUniverses[ctrlIndex].Add(absoluteUniverse);
                 }
+            }
+
+            if (LedCount > 0 && PixelMap[0].controllerIndex >= 0)
+            {
+                Debug.Log($"[PixelMapping] 1ère LED → univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1} " +
+                          $"(startUniverse={network.controllers[0].startUniverse})");
             }
 
             Debug.Log($"[PixelMapping] Mapping construit : {LedCount} LEDs, " +
@@ -108,20 +117,19 @@ namespace Laps.Core
         }
 
         /// <summary>
-        /// Trouve l'index du contrôleur qui gère l'univers donné.
-        /// Retourne -1 si aucun contrôleur ne couvre cet univers.
+        /// Trouve le contrôleur qui gère le N-ième univers de l'installation (slot 0-based).
         /// </summary>
-        private int FindControllerForUniverse(ControllerConfig[] controllers, int universe)
+        private int FindControllerForUniverseSlot(ControllerConfig[] controllers, int universeSlot)
         {
-            if (controllers == null) return -1;
+            if (controllers == null || universeSlot < 0) return -1;
             for (int i = 0; i < controllers.Length; i++)
             {
                 var c = controllers[i];
                 int count = c.universeCount > 0 ? c.universeCount : 32;
-                if (universe >= c.startUniverse && universe < c.startUniverse + count)
+                if (universeSlot < count)
                     return i;
             }
-            return -1; // Univers non couvert
+            return -1;
         }
 
         /// <summary>

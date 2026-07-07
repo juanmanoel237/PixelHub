@@ -19,7 +19,7 @@ const MATRIX_W       = parseInt(process.env.MATRIX_W)  || 256;  // 4×128 = 256
 const MATRIX_H       = parseInt(process.env.MATRIX_H)  || 256;  // 4×128 = 256
 const CH_PER_LED     = 3;
 const LEDS_PER_UNIV  = Math.floor(512 / CH_PER_LED); // 170
-const START_UNIVERSE = process.env.START_UNIVERSE !== undefined ? parseInt(process.env.START_UNIVERSE) : 0;
+const START_UNIVERSE = process.env.START_UNIVERSE !== undefined ? parseInt(process.env.START_UNIVERSE) : 1;
 const SCALE          = parseInt(process.env.SCALE) || 5; // ×5 = lettres 25×35px
 const SERPENTINE     = process.env.SERPENTINE !== '0'; // true par défaut (matrices zigzag)
 

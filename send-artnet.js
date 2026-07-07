@@ -12,7 +12,7 @@ const dgram = require("dgram");
 
 const TARGET_IP = "192.168.1.45";
 const ARTNET_PORT = 6454;
-const UNIVERSE =1; // comme sur la photo du cours
+const UNIVERSE = 1; // aligné avec config.json (startUniverse: 1)
 const DMX_CHANNELS = 512;
 
 // On prépare 512 canaux DMX, initialisés à 0

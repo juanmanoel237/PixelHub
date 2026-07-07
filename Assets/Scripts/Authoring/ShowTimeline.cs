@@ -169,7 +169,7 @@ namespace Laps.Authoring
         {
             _showData = new ShowData
             {
-                showName     = "Demo Text",
+                showName     = "le continent",
                 totalDuration = 120f,
                 layers        = new List<TimelineLayer>
                 {
@@ -182,9 +182,9 @@ namespace Laps.Authoring
                                 timestamp = 0f, 
                                 effectType = EffectType.TextDisplay,
                                 parameters = new EffectParameters {
-                                    text = "SPACE",
+                                    text = "le continent",
                                     textScale = 5,
-                                    colorA = Color.red
+                                    colorA = new Color(0f, 0.47f, 1f) // bleu comme test.js
                                 }
                             }
                         }
