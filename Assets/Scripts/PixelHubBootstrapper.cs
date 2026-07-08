@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Playables;
 using Laps.Core;
 using Laps.Routing;
 using Laps.Authoring;
@@ -21,6 +22,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private RoutingEngine  _routingEngine;
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
+    [SerializeField] private AudioReactiveProvider _audioReactive;
 
     private LedPreviewOverlay _previewOverlay;
 
@@ -87,7 +89,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif");
     }
 
     private void Update()
@@ -96,6 +98,9 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToTimeline();
         else if (Input.GetKeyDown(KeyCode.D))
             SwitchToDebug();
+        // AZERTY : la touche "A" correspond souvent à KeyCode.Q
+        else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
+            SwitchToAudioReactive();
         else if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
@@ -134,6 +139,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
         if (_debugPanel == null)
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
+        if (_audioReactive == null)
+            _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -161,11 +168,35 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
     }
 
+    public void SwitchToAudioReactive()
+    {
+        _routingEngine.StopRoutingThread();
+
+        // Relier l'AudioSource de ShowDirector (Unity Timeline) et relancer la musique
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            var src = director.GetComponent<AudioSource>();
+            if (src != null)
+                _audioReactive.SetAudioSource(src);
+            if (director.state != PlayState.Playing)
+                director.Play();
+        }
+
+        _audioReactive?.ResetIntro();
+
+        _routingEngine.SetStateProvider(_audioReactive);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Manual;
+        _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif — pump/kick");
+        Debug.Log("[PixelHubBootstrapper] Mode Audio-réactif actif (basses/kicks).");
+    }
+
     private void UpdatePreviewProvider()
     {
         if (_previewOverlay == null) return;
         if (_currentMode == StartMode.Timeline)
-            _previewOverlay.SetProvider(_showTimeline, "Timeline — le continent");
+            _previewOverlay.SetProvider(_showTimeline, "Timeline");
         else if (_currentMode == StartMode.Debug)
             _previewOverlay.SetProvider(_debugPanel, "Debug");
     }
