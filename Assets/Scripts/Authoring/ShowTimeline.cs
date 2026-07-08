@@ -282,7 +282,7 @@ namespace Laps.Authoring
             var cfg = ConfigManager.Config;
             _ledCount     = cfg.mapping.ledCount;
             _screenWidth  = cfg.mapping.screenWidth  > 0 ? cfg.mapping.screenWidth  : 128;
-            _screenHeight = cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 130;
+            _screenHeight = cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 128;
             _state       = new Color32[_ledCount];
             _layerBuffer = new Color32[_ledCount];
             _lyreStates  = new LyreState[cfg.mapping.lyres?.Length ?? 0];

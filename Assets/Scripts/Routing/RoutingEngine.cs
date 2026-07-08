@@ -175,6 +175,8 @@ namespace Laps.Routing
 
         /// <summary>
         /// Convertit le snapshot Color32[] en paquets DMX et les envoie.
+        /// Les buffers DMX sont indexés par (controllerIndex * 1000 + universe)
+        /// car plusieurs contrôleurs peuvent avoir les mêmes numéros d'univers.
         /// </summary>
         private void RouteState(Color32[] state, LyreState[] lyres)
         {
@@ -192,12 +194,18 @@ namespace Laps.Routing
                 ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
                 if (addr.controllerIndex < 0) continue; // LED non mappée
 
-                // Obtenir ou créer le buffer DMX pour cet univers
-                if (!_dmxBuffers.TryGetValue(addr.universe, out byte[] buf))
+                // Clé composite : controllerIndex * 1000 + universe
+                int bufferKey = addr.controllerIndex * 1000 + addr.universe;
+
+                // Obtenir ou créer le buffer DMX pour ce contrôleur/univers
+                if (!_dmxBuffers.TryGetValue(bufferKey, out byte[] buf))
                 {
                     buf = new byte[512];
-                    _dmxBuffers[addr.universe] = buf;
+                    _dmxBuffers[bufferKey] = buf;
                 }
+
+                // Vérifier que le canal ne dépasse pas la taille du buffer
+                if (addr.channel + channels - 1 >= 512) continue;
 
                 Color32 c = state[i];
                 buf[addr.channel]     = c.r;
@@ -215,10 +223,16 @@ namespace Laps.Routing
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    if (!_dmxBuffers.TryGetValue(lyreCfg.universe, out byte[] buf))
+                    // Trouver le contrôleur par IP pour les lyres
+                    int lyreCtrlIdx = FindControllerIndexByIp(lyreCfg.controllerIp, config);
+                    if (lyreCtrlIdx < 0) continue;
+
+                    int lyreKey = lyreCtrlIdx * 1000 + lyreCfg.universe;
+
+                    if (!_dmxBuffers.TryGetValue(lyreKey, out byte[] buf))
                     {
                         buf = new byte[512];
-                        _dmxBuffers[lyreCfg.universe] = buf;
+                        _dmxBuffers[lyreKey] = buf;
                     }
 
                     int ch = lyreCfg.startChannel - 1; // DMX 1-based → 0-based
@@ -236,14 +250,17 @@ namespace Laps.Routing
             // ── 4. Envoyer les paquets ArtNet (uniquement les univers non vides) ─
             foreach (var kvp in _dmxBuffers)
             {
-                int universe = kvp.Key;
+                int bufferKey = kvp.Key;
                 byte[] dmxData = kvp.Value;
 
                 if (!HasNonZeroData(dmxData)) continue;
 
-                // Trouver le contrôleur responsable de cet univers
-                string ip = FindControllerIp(universe, config);
-                if (string.IsNullOrEmpty(ip)) continue;
+                // Décoder la clé composite
+                int ctrlIdx  = bufferKey / 1000;
+                int universe = bufferKey % 1000;
+
+                if (ctrlIdx < 0 || ctrlIdx >= config.network.controllers.Length) continue;
+                string ip = config.network.controllers[ctrlIdx].ip;
 
                 _artNetSender.SendUniverse(ip, universe, dmxData);
             }
@@ -258,15 +275,12 @@ namespace Laps.Routing
 
         // ── Helpers ────────────────────────────────────────────
 
-        private string FindControllerIp(int universe, AppConfig config)
+        private int FindControllerIndexByIp(string ip, AppConfig config)
         {
-            foreach (var ctrl in config.network.controllers)
-            {
-                int count = ctrl.universeCount > 0 ? ctrl.universeCount : 32;
-                if (universe >= ctrl.startUniverse && universe < ctrl.startUniverse + count)
-                    return ctrl.ip;
-            }
-            return null;
+            if (string.IsNullOrEmpty(ip) || config.network.controllers == null) return -1;
+            for (int i = 0; i < config.network.controllers.Length; i++)
+                if (config.network.controllers[i].ip == ip) return i;
+            return -1;
         }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)

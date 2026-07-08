@@ -10,27 +10,41 @@ namespace Laps.Core
     public struct LEDAddress
     {
         public int controllerIndex; // Index dans ConfigManager.Config.network.controllers
-        public int universe;        // Univers DMX absolu (0-127)
+        public int universe;        // Univers DMX (0-31 par contrôleur)
         public int channel;         // Canal dans l'univers (0-511), multiple de channelsPerLed
     }
 
     /// <summary>
-    /// Calcule et expose le mapping complet : index LED → adresse DMX.
-    /// Satisfait P4 (architecture flexible) : l'authoring n'a besoin que d'un index de pixel,
-    /// le mapping physique est entièrement géré ici et rechargé à la volée si la config change.
+    /// Calcule et expose le mapping complet : pixel visible (x, y) → adresse DMX.
+    ///
+    /// Layout physique du mur LED Glassworks :
+    /// - 64 bandes verticales, chacune avec 259 LEDs (montée + descente)
+    /// - Chaque bande crée 2 colonnes visibles de 128 LEDs
+    /// - 4 contrôleurs BC216 (16 bandes chacun = 32 univers)
+    ///
+    /// Structure d'une bande (259 LEDs, 0-indexed) :
+    ///   LED  0     : invisible (fixation bas)
+    ///   LEDs 1-128 : 128 visibles (montée, bas → haut)
+    ///   LED  129   : invisible (fixation haut)
+    ///   LEDs 130-257: 128 visibles (descente, haut → bas)
+    ///   LED  258   : invisible (fixation bas)
+    ///
+    /// DMX : 170 LEDs RGB par univers → 2 univers par bande de 259 LEDs
     /// </summary>
     public class PixelMapping
     {
         // Tableau principal : pixelMap[ledIndex] = LEDAddress
+        // ledIndex = y * screenWidth + x (pixel visible sur l'écran 128×128)
         public LEDAddress[] PixelMap { get; private set; }
 
-        // Nombre total de LEDs mappées
+        // Nombre total de LEDs visibles
         public int LedCount { get; private set; }
 
-        // Largeur de l'écran (nécessaire pour le calcul serpentin)
+        // Dimensions de l'écran visible
         public int ScreenWidth { get; private set; }
+        public int ScreenHeight { get; private set; }
 
-        // Mapping serpéntin actif ?
+        // Mapping serpéntin actif ?
         public bool IsSerpentine { get; private set; }
 
         // Mapping inversé : controllerIndex → liste des univers qu'il gère
@@ -38,6 +52,12 @@ namespace Laps.Core
 
         // Nombre de canaux par LED (3=RGB, 4=RGBW)
         public int ChannelsPerLed { get; private set; }
+
+        // Configuration des bandes
+        private int _totalStrips;
+        private int _ledsPerStrip;
+        private int _visibleLedsPerColumn;
+        private int _stripsPerController;
 
         // ────────────────────────────────────────────────────────
 
@@ -50,86 +70,99 @@ namespace Laps.Core
             var mapping = config.mapping;
             var network = config.network;
 
-            LedCount      = mapping.ledCount;
-            ScreenWidth   = mapping.screenWidth > 0 ? mapping.screenWidth : 128;
-            IsSerpentine  = mapping.serpentine;
+            ScreenWidth  = mapping.screenWidth  > 0 ? mapping.screenWidth  : 128;
+            ScreenHeight = mapping.screenHeight > 0 ? mapping.screenHeight : 128;
+            LedCount     = ScreenWidth * ScreenHeight;
+            IsSerpentine = mapping.serpentine;
             ChannelsPerLed = mapping.channelsPerLed > 0 ? mapping.channelsPerLed : 3;
-            PixelMap      = new LEDAddress[LedCount];
+
+            _totalStrips          = mapping.totalStrips          > 0 ? mapping.totalStrips          : 64;
+            _ledsPerStrip         = mapping.ledsPerStrip         > 0 ? mapping.ledsPerStrip         : 259;
+            _visibleLedsPerColumn = mapping.visibleLedsPerColumn > 0 ? mapping.visibleLedsPerColumn : 128;
+            _stripsPerController  = mapping.stripsPerController  > 0 ? mapping.stripsPerController  : 16;
+
+            PixelMap = new LEDAddress[LedCount];
             ControllerUniverses = new Dictionary<int, List<int>>();
 
             // Nombre de LEDs par univers DMX
-            // Un univers = 512 canaux. Ex: RGB → 170 LEDs/univers ; RGBW → 128 LEDs/univers
-            int ledsPerUniverse = 512 / ChannelsPerLed;
+            int ledsPerUniverse = 512 / ChannelsPerLed; // 170 pour RGB
 
-            for (int ledIndex = 0; ledIndex < LedCount; ledIndex++)
+            for (int y = 0; y < ScreenHeight; y++)
             {
-                // ── Calcul de l'adresse physique (avec serpentin si actif) ──
-                int physicalIndex;
-                if (IsSerpentine)
+                for (int x = 0; x < ScreenWidth; x++)
                 {
-                    int y = ledIndex / ScreenWidth;
-                    int x = ledIndex % ScreenWidth;
-                    // Lignes impaires : câblage de droite à gauche
-                    int physX = (y % 2 == 1) ? (ScreenWidth - 1 - x) : x;
-                    physicalIndex = y * ScreenWidth + physX;
-                }
-                else
-                {
-                    physicalIndex = ledIndex;
-                }
+                    int pixelIndex = y * ScreenWidth + x;
 
-                int universeSlot = physicalIndex / ledsPerUniverse; // 0, 1, 2… dans l'installation
-                int channel      = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
+                    // ── Trouver la bande physique et la LED physique ──
 
-                // Univers Art-Net absolu = startUniverse + slot (comme send-artnet.js UNIVERSE=1)
-                int ctrlIndex = FindControllerForUniverseSlot(network.controllers, universeSlot);
-                int absoluteUniverse = ctrlIndex >= 0
-                    ? network.controllers[ctrlIndex].startUniverse + universeSlot
-                    : -1;
+                    // Chaque bande crée 2 colonnes visibles
+                    int stripIndex = x / 2;
+                    bool isUpColumn = (x % 2 == 0); // Colonne paire = montée
 
-                PixelMap[ledIndex] = new LEDAddress
-                {
-                    controllerIndex = ctrlIndex,
-                    universe = absoluteUniverse,
-                    channel = channel
-                };
+                    // LED physique dans la bande (0-indexed, sur 259)
+                    int physicalLed;
+                    if (isUpColumn)
+                    {
+                        // Montée : LED 1 (bas) à LED 128 (haut)
+                        // Screen y=0 (haut) → LED physique 128
+                        // Screen y=127 (bas) → LED physique 1
+                        physicalLed = _visibleLedsPerColumn - y; // 128, 127, ..., 1
+                    }
+                    else
+                    {
+                        // Descente : LED 130 (haut) à LED 257 (bas)
+                        // Screen y=0 (haut) → LED physique 130
+                        // Screen y=127 (bas) → LED physique 257
+                        physicalLed = (_visibleLedsPerColumn + 1) + 1 + y; // 130, 131, ..., 257
+                    }
 
-                // Enregistrer dans le mapping inversé
-                if (ctrlIndex >= 0 && absoluteUniverse >= 0)
-                {
-                    if (!ControllerUniverses.ContainsKey(ctrlIndex))
-                        ControllerUniverses[ctrlIndex] = new List<int>();
+                    // ── Calculer l'univers et le canal DMX ──
 
-                    if (!ControllerUniverses[ctrlIndex].Contains(absoluteUniverse))
-                        ControllerUniverses[ctrlIndex].Add(absoluteUniverse);
+                    // Chaque bande a 2 univers consécutifs au sein de son contrôleur
+                    int stripLocalIndex = stripIndex % _stripsPerController; // 0-15 dans le contrôleur
+                    int universeBase = stripLocalIndex * 2; // Univers de base (0, 2, 4, ...)
+
+                    int universeOffset = physicalLed / ledsPerUniverse; // 0 ou 1
+                    int universe = universeBase + universeOffset;
+                    int channel = (physicalLed % ledsPerUniverse) * ChannelsPerLed;
+
+                    // ── Trouver le contrôleur ──
+
+                    int controllerIndex = stripIndex / _stripsPerController; // 0, 1, 2, 3
+                    if (controllerIndex >= network.controllers.Length)
+                        controllerIndex = network.controllers.Length - 1;
+
+                    PixelMap[pixelIndex] = new LEDAddress
+                    {
+                        controllerIndex = controllerIndex,
+                        universe = universe,
+                        channel = channel
+                    };
+
+                    // Enregistrer dans le mapping inversé
+                    if (!ControllerUniverses.ContainsKey(controllerIndex))
+                        ControllerUniverses[controllerIndex] = new List<int>();
+
+                    if (!ControllerUniverses[controllerIndex].Contains(universe))
+                        ControllerUniverses[controllerIndex].Add(universe);
                 }
             }
 
-            if (LedCount > 0 && PixelMap[0].controllerIndex >= 0)
+            // Logs de diagnostic
+            if (LedCount > 0)
             {
-                Debug.Log($"[PixelMapping] 1ère LED → univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1} " +
-                          $"(startUniverse={network.controllers[0].startUniverse})");
+                var first = PixelMap[0];
+                var last  = PixelMap[LedCount - 1];
+                Debug.Log($"[PixelMapping] 1ère LED (0,0) → ctrl[{first.controllerIndex}] " +
+                          $"univ {first.universe}, canal {first.channel}");
+                Debug.Log($"[PixelMapping] Dernière LED ({ScreenWidth-1},{ScreenHeight-1}) → " +
+                          $"ctrl[{last.controllerIndex}] univ {last.universe}, canal {last.channel}");
             }
 
-            Debug.Log($"[PixelMapping] Mapping construit : {LedCount} LEDs, " +
+            Debug.Log($"[PixelMapping] Mapping construit : {LedCount} LEDs visibles ({ScreenWidth}×{ScreenHeight}), " +
+                      $"{_totalStrips} bandes de {_ledsPerStrip} LEDs, " +
                       $"{ledsPerUniverse} LEDs/univers, {ChannelsPerLed} canaux/LED, " +
-                      $"serpentin={IsSerpentine}");
-        }
-
-        /// <summary>
-        /// Trouve le contrôleur qui gère le N-ième univers de l'installation (slot 0-based).
-        /// </summary>
-        private int FindControllerForUniverseSlot(ControllerConfig[] controllers, int universeSlot)
-        {
-            if (controllers == null || universeSlot < 0) return -1;
-            for (int i = 0; i < controllers.Length; i++)
-            {
-                var c = controllers[i];
-                int count = c.universeCount > 0 ? c.universeCount : 32;
-                if (universeSlot < count)
-                    return i;
-            }
-            return -1;
+                      $"{network.controllers.Length} contrôleurs");
         }
 
         /// <summary>
@@ -146,6 +179,6 @@ namespace Laps.Core
         /// <summary>
         /// Nombre total d'univers utilisés par ce mapping.
         /// </summary>
-        public int TotalUniverses => LedCount > 0 ? (LedCount / (512 / ChannelsPerLed)) + 1 : 0;
+        public int TotalUniverses => _totalStrips * 2; // 2 univers par bande
     }
 }

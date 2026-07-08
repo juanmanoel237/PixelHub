@@ -49,11 +49,18 @@ namespace Laps.Core
     public class MappingConfig
     {
         public int ledCount;        // Nombre total de LEDs sur l'écran principal
-        public int screenWidth;     // Largeur de l'écran en pixels
-        public int screenHeight;    // Hauteur de l'écran en pixels
+        public int screenWidth;     // Largeur de l'écran en pixels visibles
+        public int screenHeight;    // Hauteur de l'écran en pixels visibles
         public string pixelOrder;   // "RGB" ou "RGBW" ou "GRB" etc.
         public int channelsPerLed;  // 3 ou 4
-        public bool serpentine;     // true = lignes impaires câblées de droite à gauche
+        public bool serpentine;     // true = câblage serpentin (montée/descente)
+
+        // ── Configuration par bande (strip-based) ─────────────
+        public int totalStrips;         // Nombre total de bandes physiques (ex: 64)
+        public int ledsPerStrip;        // LEDs par bande physique (ex: 259)
+        public int visibleLedsPerColumn; // LEDs visibles par colonne (ex: 128)
+        public int stripsPerController; // Bandes gérées par chaque contrôleur (ex: 16)
+
         public StripConfig[] strips;
         public LyreConfig[] lyres;
     }
@@ -148,23 +155,29 @@ namespace Laps.Core
                 {
                     controllers = new[]
                     {
-                        // Un seul contrôleur couvre tous les univers 0-385
-                        // (65 536 LEDs ÷ 170 LEDs/univers = 386 univers)
-                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 1, universeCount = 386 }
+                        // 4 contrôleurs BC216, chacun avec 16 sorties (32 univers)
+                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.46", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.47", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.48", startUniverse = 0, universeCount = 32 }
                     },
                     eHubPort = 9000,
                     artNetPort = 6454
                 },
                 mapping = new MappingConfig
                 {
-                    ledCount      = 65536,       // 256 × 256
-                    screenWidth   = 256,
-                    screenHeight  = 256,
-                    pixelOrder    = "RGB",
-                    channelsPerLed = 3,
-                    serpentine    = true,         // Matrice câblée en zigzag
-                    strips        = new StripConfig[0],
-                    lyres         = new LyreConfig[0]
+                    ledCount             = 16384, // 128 × 128 LEDs visibles
+                    screenWidth          = 128,
+                    screenHeight         = 128,
+                    pixelOrder           = "RGB",
+                    channelsPerLed       = 3,
+                    serpentine           = true,
+                    totalStrips          = 64,     // 64 bandes physiques
+                    ledsPerStrip         = 259,    // LEDs par bande (dont 3 invisibles)
+                    visibleLedsPerColumn = 128,    // LEDs visibles par demi-bande
+                    stripsPerController  = 16,     // 16 bandes par BC216
+                    strips               = new StripConfig[0],
+                    lyres                = new LyreConfig[0]
                 }
             };
 
