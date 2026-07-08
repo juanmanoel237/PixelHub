@@ -169,7 +169,7 @@ namespace Laps.Authoring
         {
             _showData = new ShowData
             {
-                showName     = "le continent",
+                showName     = "show",
                 totalDuration = 120f,
                 layers        = new List<TimelineLayer>
                 {
@@ -178,14 +178,11 @@ namespace Laps.Authoring
                         name = "Couche 1",
                         keyframes = new List<Keyframe>
                         {
-                            new Keyframe { 
-                                timestamp = 0f, 
-                                effectType = EffectType.TextDisplay,
-                                parameters = new EffectParameters {
-                                    text = "le continent",
-                                    textScale = 5,
-                                    colorA = new Color(0f, 0.47f, 1f) // bleu comme test.js
-                                }
+                            // Show vide par défaut : on évite d'imposer un texte à l'écran.
+                            new Keyframe {
+                                timestamp = 0f,
+                                effectType = EffectType.BlackOut,
+                                parameters = new EffectParameters { intensity = 1f }
                             }
                         }
                     }
