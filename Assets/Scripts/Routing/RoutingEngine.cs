@@ -38,6 +38,7 @@ namespace Laps.Routing
         // Buffers DMX par univers — évite les allocations en boucle
         // Key = univers absolu, Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
+        private readonly List<int> _universesToSend = new List<int>(256);
 
         // Snapshot protégé par lock (copie des couleurs depuis le main thread)
         private Color32[] _snapshot;
@@ -143,19 +144,17 @@ namespace Laps.Routing
             {
                 sw.Restart();
 
-                bool hasWork;
                 Color32[] snapshot;
                 LyreState[] lyres;
 
                 lock (_lock)
                 {
-                    hasWork  = _dirty;
                     snapshot = _snapshot;
                     lyres    = _lyreSnapshot;
                     _dirty   = false;
                 }
 
-                if (hasWork && snapshot != null && _pixelMapping != null)
+                if (snapshot != null && _pixelMapping != null)
                 {
                     RouteState(snapshot, lyres);
                 }
@@ -163,7 +162,7 @@ namespace Laps.Routing
                 sw.Stop();
                 float elapsed = (float)sw.Elapsed.TotalSeconds;
                 RoutingMs  = elapsed * 1000f;
-                RoutingFps = hasWork ? 1f / Math.Max(elapsed, 0.0001f) : RoutingFps;
+                RoutingFps = 1f / Math.Max(elapsed, 0.0001f);
                 _artNetSender?.UpdateStats(elapsed);
 
                 // Attente précise pour respecter la fréquence cible
@@ -223,16 +222,22 @@ namespace Laps.Routing
                 }
             }
 
-            // ── 4. Envoyer les paquets ArtNet (uniquement les univers non vides) ─
+            // ── 4. Envoyer les paquets ArtNet (univers triés, même séquence par frame) ─
+            _artNetSender.BeginFrame();
+
+            _universesToSend.Clear();
             foreach (var kvp in _dmxBuffers)
             {
-                int universe = kvp.Key;
-                byte[] dmxData = kvp.Value;
+                if (HasNonZeroData(kvp.Value))
+                    _universesToSend.Add(kvp.Key);
+            }
+            _universesToSend.Sort();
 
-                if (!HasNonZeroData(dmxData)) continue;
+            for (int i = 0; i < _universesToSend.Count; i++)
+            {
+                int universe = _universesToSend[i];
+                byte[] dmxData = _dmxBuffers[universe];
 
-                // Chaque BC216 écoute les univers 0-31 sur SA propre IP.
-                // On convertit l'univers absolu interne → univers local dans le paquet ArtNet.
                 if (!TryGetArtNetTarget(universe, config, out string ip, out int artNetUniverse))
                     continue;
 
