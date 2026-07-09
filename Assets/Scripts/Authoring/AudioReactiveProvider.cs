@@ -91,6 +91,8 @@ namespace Laps.Authoring
         [SerializeField] private float _ambientMin = 0.22f;
 
         [Header("Style global (3 presets premium)")]
+        [Tooltip("Fond noir (recommandé sur mur LED). 'Transparent' n'existe pas sur des LEDs : le noir = éteint.")]
+        [SerializeField] private bool _blackBackground = true;
         [SerializeField] private Color _bgCenter = new Color(0.015f, 0.015f, 0.045f);
         [SerializeField] private Color _bgEdge = new Color(0.03f, 0.02f, 0.08f);
         [SerializeField, Range(0.5f, 1f)] private float _neonSaturation = 0.82f;
@@ -597,6 +599,14 @@ namespace Laps.Authoring
 
         private void FillPremiumBackground(float cx, float cy, float invHalf, float pump)
         {
+            if (_blackBackground)
+            {
+                // Noir pur = LEDs éteintes (équivalent visuel d'un "fond transparent")
+                for (int i = 0; i < _state.Length; i++)
+                    _state[i] = new Color32(0, 0, 0, 255);
+                return;
+            }
+
             for (int y = 0; y < _h; y++)
             {
                 for (int x = 0; x < _w; x++)
