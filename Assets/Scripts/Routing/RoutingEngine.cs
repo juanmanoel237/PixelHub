@@ -33,15 +33,16 @@ namespace Laps.Routing
         // Thread de routage dédié
         private Thread  _routingThread;
         private bool    _running;
-        private bool    _dirty; // Demande de mise à jour depuis le main thread
 
         // Buffers DMX par univers — évite les allocations en boucle
         // Key = univers absolu, Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
         private readonly List<int> _universesToSend = new List<int>(256);
 
-        // Snapshot protégé par lock (copie des couleurs depuis le main thread)
-        private Color32[] _snapshot;
+        // Double buffer : le main thread écrit dans _writeBuffer, le thread routage lit _readBuffer
+        private Color32[] _readBuffer;
+        private Color32[] _writeBuffer;
+        private Color32[] _routingCopy; // copie locale pour éviter la course avec le swap
         private LyreState[] _lyreSnapshot;
         private readonly object _lock = new object();
 
@@ -123,13 +124,18 @@ namespace Laps.Routing
 
             lock (_lock)
             {
-                // Resize du snapshot si nécessaire (ex: rechargement de config)
-                if (_snapshot == null || _snapshot.Length != state.Length)
-                    _snapshot = new Color32[state.Length];
+                if (state == null) return;
 
-                Array.Copy(state, _snapshot, state.Length);
+                if (_writeBuffer == null || _writeBuffer.Length != state.Length)
+                    _writeBuffer = new Color32[state.Length];
+
+                Array.Copy(state, _writeBuffer, state.Length);
                 _lyreSnapshot = lyres;
-                _dirty = true;
+
+                // Swap buffers : le thread routage garde l'ancien _readBuffer le temps de le lire
+                Color32[] tmp = _readBuffer;
+                _readBuffer = _writeBuffer;
+                _writeBuffer = tmp;
             }
         }
 
@@ -149,9 +155,19 @@ namespace Laps.Routing
 
                 lock (_lock)
                 {
-                    snapshot = _snapshot;
-                    lyres    = _lyreSnapshot;
-                    _dirty   = false;
+                    if (_readBuffer == null)
+                    {
+                        snapshot = null;
+                        lyres = _lyreSnapshot;
+                    }
+                    else
+                    {
+                        if (_routingCopy == null || _routingCopy.Length != _readBuffer.Length)
+                            _routingCopy = new Color32[_readBuffer.Length];
+                        Array.Copy(_readBuffer, _routingCopy, _readBuffer.Length);
+                        snapshot = _routingCopy;
+                        lyres = _lyreSnapshot;
+                    }
                 }
 
                 if (snapshot != null && _pixelMapping != null)

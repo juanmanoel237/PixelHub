@@ -74,7 +74,8 @@ namespace Laps.Routing
         /// </summary>
         public void BeginFrame()
         {
-            _sequence = _sequence == 255 ? (byte)1 : (byte)(_sequence + 1);
+            // 0 = séquence désactivée (recommandé Art-Net pour multi-univers synchronisés)
+            _sequence = 0;
         }
 
         /// <summary>
