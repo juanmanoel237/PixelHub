@@ -122,12 +122,14 @@ namespace Laps.Core
         private int FindControllerForUniverseSlot(ControllerConfig[] controllers, int universeSlot)
         {
             if (controllers == null || universeSlot < 0) return -1;
+            int remaining = universeSlot;
             for (int i = 0; i < controllers.Length; i++)
             {
                 var c = controllers[i];
                 int count = c.universeCount > 0 ? c.universeCount : 32;
-                if (universeSlot < count)
+                if (remaining < count)
                     return i;
+                remaining -= count;
             }
             return -1;
         }
