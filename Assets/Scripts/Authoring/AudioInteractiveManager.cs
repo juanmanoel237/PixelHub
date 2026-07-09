@@ -12,6 +12,10 @@ namespace Laps.Authoring
         public KeyCode key;
         public AudioClip clip;
         [Range(0f, 1f)] public float volume = 1f;
+        
+        [Header("Effet Visuel (Optionnel)")]
+        [Tooltip("Prefab VFX (ex: Système de particules de feu d'artifice) à faire apparaître lors de l'appui.")]
+        public GameObject visualPrefab;
     }
 
     /// <summary>
@@ -52,10 +56,24 @@ namespace Laps.Authoring
         {
             foreach (var mapping in soundMappings)
             {
-                if (Input.GetKeyDown(mapping.key) && mapping.clip != null)
+                if (Input.GetKeyDown(mapping.key))
                 {
-                    // PlayOneShot permet de superposer les sons sans couper le précédent
-                    _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
+                    // 1. Jouer le son
+                    if (mapping.clip != null)
+                    {
+                        _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
+                    }
+                    
+                    // 2. Faire apparaître l'effet visuel (si configuré)
+                    if (mapping.visualPrefab != null)
+                    {
+                        // On le fait apparaître à une position aléatoire devant la caméra (ex: Z = 10)
+                        Vector3 spawnPos = new Vector3(Random.Range(-5f, 5f), Random.Range(-5f, 5f), 10f);
+                        GameObject vfx = Instantiate(mapping.visualPrefab, spawnPos, Quaternion.identity);
+                        
+                        // Nettoyage automatique après 5 secondes pour libérer la mémoire
+                        Destroy(vfx, 5f);
+                    }
                 }
             }
         }
