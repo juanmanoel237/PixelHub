@@ -231,11 +231,12 @@ namespace Laps.Routing
 
                 if (!HasNonZeroData(dmxData)) continue;
 
-                // Trouver le contrôleur responsable de cet univers
-                string ip = FindControllerIp(universe, config);
-                if (string.IsNullOrEmpty(ip)) continue;
+                // Chaque BC216 écoute les univers 0-31 sur SA propre IP.
+                // On convertit l'univers absolu interne → univers local dans le paquet ArtNet.
+                if (!TryGetArtNetTarget(universe, config, out string ip, out int artNetUniverse))
+                    continue;
 
-                _artNetSender.SendUniverse(ip, universe, dmxData);
+                _artNetSender.SendUniverse(ip, artNetUniverse, dmxData);
             }
         }
 
@@ -301,15 +302,27 @@ namespace Laps.Routing
 
         // ── Helpers ────────────────────────────────────────────
 
-        private string FindControllerIp(int universe, AppConfig config)
+        /// <summary>
+        /// Résout un univers absolu interne vers IP + univers local ArtNet (0-31 par contrôleur).
+        /// </summary>
+        private static bool TryGetArtNetTarget(int absoluteUniverse, AppConfig config, out string ip, out int artNetUniverse)
         {
+            ip = null;
+            artNetUniverse = 0;
+
+            if (config?.network?.controllers == null) return false;
+
             foreach (var ctrl in config.network.controllers)
             {
                 int count = ctrl.universeCount > 0 ? ctrl.universeCount : 32;
-                if (universe >= ctrl.startUniverse && universe < ctrl.startUniverse + count)
-                    return ctrl.ip;
+                if (absoluteUniverse >= ctrl.startUniverse && absoluteUniverse < ctrl.startUniverse + count)
+                {
+                    ip = ctrl.ip;
+                    artNetUniverse = absoluteUniverse - ctrl.startUniverse;
+                    return true;
+                }
             }
-            return null;
+            return false;
         }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)
