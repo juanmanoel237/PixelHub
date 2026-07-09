@@ -1,0 +1,7 @@
+﻿<Solution>
+  <Project Path="Laps.Routing.csproj" />
+  <Project Path="Laps.Core.csproj" />
+  <Project Path="Laps.Authoring.csproj" />
+  <Project Path="Laps.Bootstrap.csproj" />
+  <Project Path="Laps.Editor.csproj" />
+</Solution>

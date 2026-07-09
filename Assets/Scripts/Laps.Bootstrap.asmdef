@@ -1,9 +1,9 @@
 {
-    "name": "Laps.Authoring",
+    "name": "Laps.Bootstrap",
     "references": [
         "Laps.Core",
         "Laps.Routing",
-        "UnityEngine.UI"
+        "Laps.Authoring"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
