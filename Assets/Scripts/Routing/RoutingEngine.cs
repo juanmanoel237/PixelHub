@@ -36,7 +36,7 @@ namespace Laps.Routing
         private bool    _dirty; // Demande de mise à jour depuis le main thread
 
         // Buffers DMX par univers — évite les allocations en boucle
-        // Key = univers absolu, Value = tableau de 512 octets
+        // Key = (controllerIndex<<16) | (universe&0xFFFF), Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
 
         // Snapshot protégé par lock (copie des couleurs depuis le main thread)
@@ -192,11 +192,12 @@ namespace Laps.Routing
                 ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
                 if (addr.controllerIndex < 0) continue; // LED non mappée
 
-                // Obtenir ou créer le buffer DMX pour cet univers
-                if (!_dmxBuffers.TryGetValue(addr.universe, out byte[] buf))
+                // Obtenir ou créer le buffer DMX pour (contrôleur, univers)
+                int key = (addr.controllerIndex << 16) | (addr.universe & 0xFFFF);
+                if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                 {
                     buf = new byte[512];
-                    _dmxBuffers[addr.universe] = buf;
+                    _dmxBuffers[key] = buf;
                 }
 
                 Color32 c = state[i];
@@ -236,13 +237,19 @@ namespace Laps.Routing
             // ── 4. Envoyer les paquets ArtNet (uniquement les univers non vides) ─
             foreach (var kvp in _dmxBuffers)
             {
-                int universe = kvp.Key;
+                int key = kvp.Key;
+                int controllerIndex = (key >> 16);
+                int universe = key & 0xFFFF;
                 byte[] dmxData = kvp.Value;
 
                 if (!HasNonZeroData(dmxData)) continue;
 
-                // Trouver le contrôleur responsable de cet univers
-                string ip = FindControllerIp(universe, config);
+                if (config.network.controllers == null ||
+                    controllerIndex < 0 ||
+                    controllerIndex >= config.network.controllers.Length)
+                    continue;
+
+                string ip = config.network.controllers[controllerIndex].ip;
                 if (string.IsNullOrEmpty(ip)) continue;
 
                 _artNetSender.SendUniverse(ip, universe, dmxData);
@@ -257,17 +264,6 @@ namespace Laps.Routing
         }
 
         // ── Helpers ────────────────────────────────────────────
-
-        private string FindControllerIp(int universe, AppConfig config)
-        {
-            foreach (var ctrl in config.network.controllers)
-            {
-                int count = ctrl.universeCount > 0 ? ctrl.universeCount : 32;
-                if (universe >= ctrl.startUniverse && universe < ctrl.startUniverse + count)
-                    return ctrl.ip;
-            }
-            return null;
-        }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)
         {

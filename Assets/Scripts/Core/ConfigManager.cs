@@ -48,6 +48,7 @@ namespace Laps.Core
     [Serializable]
     public class MappingConfig
     {
+        public string layout;       // "Matrix2D" (défaut) ou "LapsWall128"
         public int ledCount;        // Nombre total de LEDs sur l'écran principal
         public int screenWidth;     // Largeur de l'écran en pixels
         public int screenHeight;    // Hauteur de l'écran en pixels
@@ -157,6 +158,7 @@ namespace Laps.Core
                 },
                 mapping = new MappingConfig
                 {
+                    layout        = "Matrix2D",
                     ledCount      = 65536,       // 256 × 256
                     screenWidth   = 256,
                     screenHeight  = 256,
