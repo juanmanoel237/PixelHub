@@ -17,15 +17,17 @@ using Laps.Authoring;
 public class PixelHubBootstrapper : MonoBehaviour
 {
     [Header("Modules (assignés dans l'Inspector)")]
-    [SerializeField] private ConfigManager  _configManager;
-    [SerializeField] private RoutingEngine  _routingEngine;
-    [SerializeField] private ShowTimeline   _showTimeline;
-    [SerializeField] private DebugPanel     _debugPanel;
+    [SerializeField] private ConfigManager      _configManager;
+    [SerializeField] private RoutingEngine      _routingEngine;
+    [SerializeField] private ShowTimeline       _showTimeline;
+    [SerializeField] private DebugPanel         _debugPanel;
+    [SerializeField] private EHubReceiver       _ehubReceiver;
+    [SerializeField] private VideoStateProvider _videoProvider;
 
     private LedPreviewOverlay _previewOverlay;
 
     [Header("Mode de démarrage")]
-    [SerializeField] private StartMode _startMode = StartMode.Timeline;
+    [SerializeField] private StartMode _startMode = StartMode.Video;
 
     private StartMode _currentMode;
 
@@ -33,7 +35,9 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         Timeline,    // Authoring classique via ShowTimeline
         Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
-        Manual       // L'utilisateur choisit via l'UI
+        Manual,      // L'utilisateur choisit via l'UI
+        EHub,        // Réception du protocole eHuB depuis Tan
+        Video        // Lecture vidéo → mur LED physique
     }
 
     private void Awake()
@@ -76,6 +80,18 @@ public class PixelHubBootstrapper : MonoBehaviour
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
+
+            case StartMode.EHub:
+                _routingEngine.SetStateProvider(_ehubReceiver);
+                _currentMode = StartMode.EHub;
+                Debug.Log("[PixelHubBootstrapper] Mode EHub actif (réception Tan).");
+                break;
+
+            case StartMode.Video:
+                _routingEngine.SetStateProvider(_videoProvider);
+                _currentMode = StartMode.Video;
+                Debug.Log("[PixelHubBootstrapper] Mode Vidéo actif → mur LED.");
+                break;
         }
 
         // Démarrer le thread de routage
@@ -87,7 +103,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | V=vidéo");
     }
 
     private void Update()
@@ -96,6 +112,10 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToTimeline();
         else if (Input.GetKeyDown(KeyCode.D))
             SwitchToDebug();
+        else if (Input.GetKeyDown(KeyCode.E))
+            SwitchToEHub();
+        else if (Input.GetKeyDown(KeyCode.V))
+            SwitchToVideo();
         else if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
@@ -134,6 +154,10 @@ public class PixelHubBootstrapper : MonoBehaviour
             _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
         if (_debugPanel == null)
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
+        if (_ehubReceiver == null)
+            _ehubReceiver = GetComponent<EHubReceiver>() ?? gameObject.AddComponent<EHubReceiver>();
+        if (_videoProvider == null)
+            _videoProvider = GetComponent<VideoStateProvider>() ?? gameObject.AddComponent<VideoStateProvider>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -161,6 +185,31 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
     }
 
+    public void SwitchToEHub()
+    {
+        _routingEngine.StopRoutingThread();
+        _showTimeline.Stop();
+        _debugPanel.SetFakeStateActive(false);
+        _routingEngine.SetStateProvider(_ehubReceiver);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.EHub;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode EHub actif.");
+    }
+
+    public void SwitchToVideo()
+    {
+        _routingEngine.StopRoutingThread();
+        _showTimeline.Stop();
+        _debugPanel.SetFakeStateActive(false);
+        _videoProvider.Play();
+        _routingEngine.SetStateProvider(_videoProvider);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Video;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode Vidéo actif → mur LED.");
+    }
+
     private void UpdatePreviewProvider()
     {
         if (_previewOverlay == null) return;
@@ -168,6 +217,10 @@ public class PixelHubBootstrapper : MonoBehaviour
             _previewOverlay.SetProvider(_showTimeline, "Timeline — le continent");
         else if (_currentMode == StartMode.Debug)
             _previewOverlay.SetProvider(_debugPanel, "Debug");
+        else if (_currentMode == StartMode.EHub)
+            _previewOverlay.SetProvider(_ehubReceiver, "EHub — Tan");
+        else if (_currentMode == StartMode.Video)
+            _previewOverlay.SetProvider(_videoProvider, "Vidéo → LED");
     }
 
     public void PlayShow()    => _showTimeline?.Play();

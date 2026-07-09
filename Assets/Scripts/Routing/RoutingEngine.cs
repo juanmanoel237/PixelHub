@@ -42,6 +42,7 @@ namespace Laps.Routing
         // Snapshot protégé par lock (copie des couleurs depuis le main thread)
         private Color32[] _snapshot;
         private LyreState[] _lyreSnapshot;
+        private bool _isEntityBasedSnapshot;
         private readonly object _lock = new object();
 
         // ── Statistiques (P8) ──────────────────────────────────
@@ -128,6 +129,7 @@ namespace Laps.Routing
 
                 Array.Copy(state, _snapshot, state.Length);
                 _lyreSnapshot = lyres;
+                _isEntityBasedSnapshot = _stateProvider.IsEntityBased;
                 _dirty = true;
             }
         }
@@ -146,18 +148,20 @@ namespace Laps.Routing
                 bool hasWork;
                 Color32[] snapshot;
                 LyreState[] lyres;
+                bool isEntityBased;
 
                 lock (_lock)
                 {
                     hasWork  = _dirty;
                     snapshot = _snapshot;
                     lyres    = _lyreSnapshot;
+                    isEntityBased = _isEntityBasedSnapshot;
                     _dirty   = false;
                 }
 
                 if (hasWork && snapshot != null && _pixelMapping != null)
                 {
-                    RouteState(snapshot, lyres);
+                    RouteState(snapshot, lyres, isEntityBased);
                 }
 
                 sw.Stop();
@@ -178,7 +182,7 @@ namespace Laps.Routing
         /// Les buffers DMX sont indexés par (controllerIndex * 1000 + universe)
         /// car plusieurs contrôleurs peuvent avoir les mêmes numéros d'univers.
         /// </summary>
-        private void RouteState(Color32[] state, LyreState[] lyres)
+        private void RouteState(Color32[] state, LyreState[] lyres, bool isEntityBased)
         {
             var config = ConfigManager.Config;
             if (config == null || _pixelMapping.PixelMap == null) return;
@@ -189,13 +193,18 @@ namespace Laps.Routing
 
             // ── 2. Écrire chaque LED dans son buffer ─────────
             int channels = _pixelMapping.ChannelsPerLed;
-            for (int i = 0; i < state.Length && i < _pixelMapping.LedCount; i++)
-            {
-                ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
-                if (addr.controllerIndex < 0) continue; // LED non mappée
+            LEDAddress[] map = isEntityBased ? _pixelMapping.EntityMap : _pixelMapping.PixelMap;
+            int maxCount = isEntityBased ? _pixelMapping.MaxEntityId : _pixelMapping.LedCount;
 
-                // Clé composite : controllerIndex * 1000 + universe
-                int bufferKey = addr.controllerIndex * 1000 + addr.universe;
+            if (map != null)
+            {
+                for (int i = 0; i < state.Length && i < maxCount; i++)
+                {
+                    ref LEDAddress addr = ref map[i];
+                    if (addr.controllerIndex < 0) continue; // LED non mappée
+
+                    // Clé composite : controllerIndex * 1000 + universe
+                    int bufferKey = addr.controllerIndex * 1000 + addr.universe;
 
                 // Obtenir ou créer le buffer DMX pour ce contrôleur/univers
                 if (!_dmxBuffers.TryGetValue(bufferKey, out byte[] buf))
@@ -207,12 +216,13 @@ namespace Laps.Routing
                 // Vérifier que le canal ne dépasse pas la taille du buffer
                 if (addr.channel + channels - 1 >= 512) continue;
 
-                Color32 c = state[i];
-                buf[addr.channel]     = c.r;
-                buf[addr.channel + 1] = c.g;
-                buf[addr.channel + 2] = c.b;
-                if (channels == 4)
-                    buf[addr.channel + 3] = 0; // Blanc = 0 par défaut
+                    Color32 c = state[i];
+                    buf[addr.channel]     = c.r;
+                    buf[addr.channel + 1] = c.g;
+                    buf[addr.channel + 2] = c.b;
+                    if (channels == 4)
+                        buf[addr.channel + 3] = 0; // Blanc = 0 par défaut
+                }
             }
 
             // ── 3. Écrire les lyres dans leurs buffers ───────

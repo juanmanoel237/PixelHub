@@ -44,6 +44,7 @@ namespace Laps.Authoring
         // ── IStateProvider (mode Fake) ───────────────────────────
         public Color32[] GetState()      => _fakeState;
         public LyreState[] GetLyreStates() => _emptyLyres;
+        public bool IsEntityBased => false;
 
         // ── Unity Lifecycle ──────────────────────────────────────
 

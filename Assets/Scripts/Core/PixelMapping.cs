@@ -37,6 +37,11 @@ namespace Laps.Core
         // ledIndex = y * screenWidth + x (pixel visible sur l'écran 128×128)
         public LEDAddress[] PixelMap { get; private set; }
 
+        // Tableau pour le mode Entité (eHuB / Tan)
+        // Index = ID de l'entité (jusqu'à 20000)
+        public LEDAddress[] EntityMap { get; private set; }
+        public int MaxEntityId { get; private set; }
+
         // Nombre total de LEDs visibles
         public int LedCount { get; private set; }
 
@@ -163,6 +168,49 @@ namespace Laps.Core
                       $"{_totalStrips} bandes de {_ledsPerStrip} LEDs, " +
                       $"{ledsPerUniverse} LEDs/univers, {ChannelsPerLed} canaux/LED, " +
                       $"{network.controllers.Length} contrôleurs");
+
+            BuildEntityMap(ledsPerUniverse, network.controllers.Length);
+        }
+
+        private void BuildEntityMap(int ledsPerUniverse, int controllersCount)
+        {
+            MaxEntityId = 20000;
+            EntityMap = new LEDAddress[MaxEntityId];
+            for (int i = 0; i < MaxEntityId; i++)
+            {
+                EntityMap[i] = new LEDAddress { controllerIndex = -1 };
+            }
+
+            for (int strip = 0; strip < _totalStrips; strip++)
+            {
+                int quarter = strip / 16;
+                int stripInQuarter = strip % 16;
+                int baseEntityId = (quarter * 5000 + 100) + (stripInQuarter * 300);
+
+                int stripLocalIndex = strip % _stripsPerController;
+                int universeBase = stripLocalIndex * 2;
+                int controllerIndex = strip / _stripsPerController;
+                if (controllerIndex >= controllersCount)
+                    controllerIndex = controllersCount - 1;
+
+                for (int physLed = 0; physLed < _ledsPerStrip; physLed++)
+                {
+                    int entityId = baseEntityId + physLed;
+                    if (entityId >= MaxEntityId) continue;
+
+                    int universeOffset = physLed / ledsPerUniverse;
+                    int universe = universeBase + universeOffset;
+                    int channel = (physLed % ledsPerUniverse) * ChannelsPerLed;
+
+                    EntityMap[entityId] = new LEDAddress
+                    {
+                        controllerIndex = controllerIndex,
+                        universe = universe,
+                        channel = channel
+                    };
+                }
+            }
+            Debug.Log($"[PixelMapping] EntityMap construit (MaxEntityId={MaxEntityId})");
         }
 
         /// <summary>

@@ -106,6 +106,7 @@ namespace Laps.Authoring
 
         public Color32[] GetState()   => _state;
         public LyreState[] GetLyreStates() => _lyreStates;
+        public bool IsEntityBased => false;
 
         // ── API publique ────────────────────────────────────────
 

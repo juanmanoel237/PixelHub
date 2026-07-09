@@ -21,7 +21,18 @@ namespace Laps.Core
         /// Chaque LyreState contient les valeurs DMX brutes à envoyer.
         /// Peut retourner null si aucun dispositif spécial n'est présent.
         /// </summary>
+        /// <summary>
+        /// Récupère l'état des lyres/spots (dispositifs spéciaux).
+        /// Chaque LyreState contient les valeurs DMX brutes à envoyer.
+        /// Peut retourner null si aucun dispositif spécial n'est présent.
+        /// </summary>
         LyreState[] GetLyreStates();
+
+        /// <summary>
+        /// Indique si l'état retourné est indexé par EntityID (mode Tan/eHuB)
+        /// ou par PixelIndex linéaire (mode Timeline local).
+        /// </summary>
+        bool IsEntityBased { get; }
     }
 
     /// <summary>
