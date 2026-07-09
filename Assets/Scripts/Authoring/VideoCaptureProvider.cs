@@ -32,11 +32,13 @@ namespace Laps.Authoring
             _renderTexture.filterMode = FilterMode.Point; // Pour garder des pixels nets
             _renderTexture.Create();
 
-            // Assigne la RenderTexture à la caméra
+            // Assigne la RenderTexture à la caméra et force un fond noir
             if (captureCamera != null)
             {
                 captureCamera.targetTexture = _renderTexture;
-                Debug.Log($"[VideoCaptureProvider] Caméra configurée pour rendre en {width}x{height}");
+                captureCamera.clearFlags = CameraClearFlags.SolidColor;
+                captureCamera.backgroundColor = Color.black;
+                Debug.Log($"[VideoCaptureProvider] Caméra configurée pour rendre en {width}x{height} sur fond noir.");
             }
             else
             {

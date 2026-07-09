@@ -23,6 +23,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
     [SerializeField] private AudioReactiveProvider _audioReactive;
+    [SerializeField] private VideoCaptureProvider _videoCapture;
 
     private LedPreviewOverlay _previewOverlay;
 
@@ -35,7 +36,8 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         Timeline,    // Authoring classique via ShowTimeline
         Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
-        Manual       // L'utilisateur choisit via l'UI
+        Manual,      // L'utilisateur choisit via l'UI
+        VideoCapture // Démarre directement sur la caméra
     }
 
     private void Awake()
@@ -78,6 +80,10 @@ public class PixelHubBootstrapper : MonoBehaviour
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
+                
+            case StartMode.VideoCapture:
+                SwitchToVideoCapture();
+                break;
         }
 
         // Démarrer le thread de routage
@@ -89,7 +95,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif | V=video-capture");
     }
 
     private void Update()
@@ -101,6 +107,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         // AZERTY : la touche "A" correspond souvent à KeyCode.Q
         else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
             SwitchToAudioReactive();
+        else if (Input.GetKeyDown(KeyCode.V))
+            SwitchToVideoCapture();
         else if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
@@ -141,6 +149,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
         if (_audioReactive == null)
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
+        if (_videoCapture == null)
+            _videoCapture = FindObjectOfType<VideoCaptureProvider>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -190,6 +200,19 @@ public class PixelHubBootstrapper : MonoBehaviour
         _currentMode = StartMode.Manual;
         _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif — pump/kick");
         Debug.Log("[PixelHubBootstrapper] Mode Audio-réactif actif (basses/kicks).");
+    }
+
+    public void SwitchToVideoCapture()
+    {
+        if (_videoCapture == null) _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_videoCapture == null) return;
+        
+        _routingEngine.StopRoutingThread();
+        _routingEngine.SetStateProvider(_videoCapture);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Manual;
+        _previewOverlay?.SetProvider(_videoCapture, "Video Capture (Feux d'artifice)");
+        Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
     }
 
     private void UpdatePreviewProvider()
