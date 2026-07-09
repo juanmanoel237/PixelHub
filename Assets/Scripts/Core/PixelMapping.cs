@@ -81,11 +81,13 @@ namespace Laps.Core
                 int universeSlot = physicalIndex / ledsPerUniverse; // 0, 1, 2… dans l'installation
                 int channel      = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
 
-                // Univers Art-Net absolu = startUniverse + slot (comme send-artnet.js UNIVERSE=1)
-                int ctrlIndex = FindControllerForUniverseSlot(network.controllers, universeSlot);
-                int absoluteUniverse = ctrlIndex >= 0
-                    ? network.controllers[ctrlIndex].startUniverse + universeSlot
-                    : -1;
+                // Univers absolu interne = startUniverse + slot local sur CE contrôleur
+                int ctrlIndex = -1;
+                int absoluteUniverse = -1;
+                if (TryResolveUniverseSlot(network.controllers, universeSlot, out ctrlIndex, out absoluteUniverse))
+                {
+                    // resolved
+                }
 
                 PixelMap[ledIndex] = new LEDAddress
                 {
@@ -117,21 +119,34 @@ namespace Laps.Core
         }
 
         /// <summary>
-        /// Trouve le contrôleur qui gère le N-ième univers de l'installation (slot 0-based).
+        /// Résout un slot d'univers global vers (contrôleur, univers absolu interne).
+        /// Ex: slot 32 → contrôleur 1, univers absolu 32 (local 0 sur .46).
         /// </summary>
-        private int FindControllerForUniverseSlot(ControllerConfig[] controllers, int universeSlot)
+        private static bool TryResolveUniverseSlot(
+            ControllerConfig[] controllers,
+            int universeSlot,
+            out int controllerIndex,
+            out int absoluteUniverse)
         {
-            if (controllers == null || universeSlot < 0) return -1;
+            controllerIndex = -1;
+            absoluteUniverse = -1;
+
+            if (controllers == null || universeSlot < 0) return false;
+
             int remaining = universeSlot;
             for (int i = 0; i < controllers.Length; i++)
             {
                 var c = controllers[i];
                 int count = c.universeCount > 0 ? c.universeCount : 32;
                 if (remaining < count)
-                    return i;
+                {
+                    controllerIndex = i;
+                    absoluteUniverse = c.startUniverse + remaining;
+                    return true;
+                }
                 remaining -= count;
             }
-            return -1;
+            return false;
         }
 
         /// <summary>

@@ -26,9 +26,9 @@
     "artNetPort": 6454
   },
   "mapping": {
-    "ledCount": 65536,
-    "screenWidth": 256,
-    "screenHeight": 256,
+    "ledCount": 16384,
+    "screenWidth": 128,
+    "screenHeight": 128,
     "pixelOrder": "RGB",
     "channelsPerLed": 3,
     "serpentine": true,

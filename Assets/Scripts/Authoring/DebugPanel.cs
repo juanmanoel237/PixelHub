@@ -6,6 +6,7 @@ using Laps.Routing;
 
 namespace Laps.Authoring
 {
+    [DefaultExecutionOrder(-50)]
     /// <summary>
     /// Panneau de débogage en temps réel (P8).
     ///
@@ -37,6 +38,9 @@ namespace Laps.Authoring
         private LyreState[] _emptyLyres = new LyreState[0];
         private Texture2D _previewTexture;
 
+        private Color _lastFakeColor;
+        private EffectType _lastFakeEffect;
+        private bool _lastFirstLedOnly;
         private int _screenWidth;
         private int _screenHeight;
         private float _statsTimer;
@@ -89,9 +93,25 @@ namespace Laps.Authoring
             // Mode "comme le prof" : une seule LED (canaux DMX 1-3)
             if (_firstLedOnly)
             {
+                if (_lastFirstLedOnly && _lastFakeColor == _fakeColor) return;
                 for (int i = 0; i < _fakeState.Length; i++)
                     _fakeState[i] = Color.black;
                 _fakeState[0] = _fakeColor;
+                _lastFirstLedOnly = true;
+                _lastFakeColor = _fakeColor;
+                return;
+            }
+
+            if (_fakeEffect == EffectType.SolidColor || _fakeEffect == EffectType.BlackOut)
+            {
+                if (!_lastFirstLedOnly && _lastFakeEffect == _fakeEffect && _lastFakeColor == _fakeColor)
+                    return;
+                var fill = _fakeEffect == EffectType.BlackOut ? Color.black : _fakeColor;
+                for (int i = 0; i < _fakeState.Length; i++)
+                    _fakeState[i] = fill;
+                _lastFakeEffect = _fakeEffect;
+                _lastFakeColor = _fakeColor;
+                _lastFirstLedOnly = false;
                 return;
             }
 
@@ -102,6 +122,9 @@ namespace Laps.Authoring
                 intensity = 1f
             };
             EffectLibrary.Evaluate(_fakeEffect, t, _screenWidth, _screenHeight, p, _fakeState);
+            _lastFakeEffect = _fakeEffect;
+            _lastFakeColor = _fakeColor;
+            _lastFirstLedOnly = false;
         }
 
         /// <summary>Test minimal : allume uniquement la 1ère LED (comme send-artnet.js).</summary>
