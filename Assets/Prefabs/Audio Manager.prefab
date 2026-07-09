@@ -146,7 +146,9 @@ MonoBehaviour:
   - key: 97
     clip: {fileID: 8300000, guid: d792bff0a34914d4fab6ee5c3b1dad1a, type: 3}
     volume: 0
+    visualPrefab: {fileID: 1128073350909929431, guid: e8abb6eec31b31443917f019d5a347e6, type: 3}
   - key: 122
     clip: {fileID: 8300000, guid: 4a370907d996f6b4184f2a514aff6e1e, type: 3}
     volume: 0
+    visualPrefab: {fileID: 6797760374518579232, guid: 43c162ff118a794459062a56ef1153ba, type: 3}
   volumeStep: 0.1
