@@ -23,6 +23,9 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
     [SerializeField] private AudioReactiveProvider _audioReactive;
+    [SerializeField] private OtherDevicesPanel _otherDevices;
+
+    private Laps.Core.CompositeStateProvider _timelineWithDevices;
 
     private LedPreviewOverlay _previewOverlay;
 
@@ -56,27 +59,30 @@ public class PixelHubBootstrapper : MonoBehaviour
         // Connecter le DebugPanel au RoutingEngine
         _debugPanel?.SetRoutingEngine(_routingEngine);
 
-        // Choisir le state provider selon le mode
+        // Choisir le state provider selon le mode (projecteurs toujours actifs via CompositeStateProvider)
         switch (_startMode)
         {
             case StartMode.Timeline:
                 _showTimeline.LoadShow();
                 _showTimeline.Play();
-                _routingEngine.SetStateProvider(_showTimeline);
+                SetProviderWithDevices(_showTimeline);
                 _currentMode = StartMode.Timeline;
                 Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
                 break;
 
             case StartMode.Debug:
-                _routingEngine.SetStateProvider(_debugPanel);
                 _debugPanel.SetFakeStateActive(true);
+                SetProviderWithDevices(_debugPanel);
                 _currentMode = StartMode.Debug;
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
                 break;
 
             case StartMode.Manual:
+                _audioReactive?.ResetIntro();
+                SetProviderWithDevices(_audioReactive);
                 _currentMode = StartMode.Manual;
-                Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
+                _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif + lyres");
+                Debug.Log("[PixelHubBootstrapper] Mode Manuel — audio + 4 lyres actives.");
                 break;
         }
 
@@ -89,11 +95,14 @@ public class PixelHubBootstrapper : MonoBehaviour
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif");
+        Debug.Log("[PixelHubBootstrapper] → GAME : aperçu LED + simulateur lyres (haut droite).");
+        Debug.Log("[PixelHubBootstrapper] → Lyres : Ctrl+1..4 puis R/G/B/M/J/C/W/0 | F3 = boîte de nuit | F2 = panneau");
     }
 
     private void Update()
     {
+        bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
         if (Input.GetKeyDown(KeyCode.T))
             SwitchToTimeline();
         else if (Input.GetKeyDown(KeyCode.D))
@@ -101,28 +110,28 @@ public class PixelHubBootstrapper : MonoBehaviour
         // AZERTY : la touche "A" correspond souvent à KeyCode.Q
         else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
             SwitchToAudioReactive();
-        else if (Input.GetKeyDown(KeyCode.Alpha1))
+        else if (!ctrl && Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
             _debugPanel?.SendFirstLedTest(Color.red);
             _previewOverlay?.SetProvider(_debugPanel, "Debug — 1ère LED rouge");
         }
-        else if (Input.GetKeyDown(KeyCode.R))
+        else if (!ctrl && Input.GetKeyDown(KeyCode.R))
         {
             SwitchToDebug();
             _debugPanel?.SendTestColor(Color.red);
         }
-        else if (Input.GetKeyDown(KeyCode.G))
+        else if (!ctrl && Input.GetKeyDown(KeyCode.G))
         {
             SwitchToDebug();
             _debugPanel?.SendTestColor(Color.green);
         }
-        else if (Input.GetKeyDown(KeyCode.B))
+        else if (!ctrl && Input.GetKeyDown(KeyCode.B))
         {
             SwitchToDebug();
             _debugPanel?.SendTestColor(Color.blue);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha0))
+        else if (!ctrl && Input.GetKeyDown(KeyCode.Alpha0))
         {
             SwitchToDebug();
             _debugPanel?.SendBlackOut();
@@ -141,6 +150,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
         if (_audioReactive == null)
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
+        if (_otherDevices == null)
+            _otherDevices = GetComponent<OtherDevicesPanel>() ?? gameObject.AddComponent<OtherDevicesPanel>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -150,7 +161,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         _routingEngine.StopRoutingThread();
         _showTimeline.LoadShow();
         _showTimeline.Play();
-        _routingEngine.SetStateProvider(_showTimeline);
+        SetProviderWithDevices(_showTimeline);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Timeline;
         UpdatePreviewProvider();
@@ -161,7 +172,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         _routingEngine.StopRoutingThread();
         _debugPanel.SetFakeStateActive(true);
-        _routingEngine.SetStateProvider(_debugPanel);
+        SetProviderWithDevices(_debugPanel);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Debug;
         UpdatePreviewProvider();
@@ -185,11 +196,17 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         _audioReactive?.ResetIntro();
 
-        _routingEngine.SetStateProvider(_audioReactive);
+        SetProviderWithDevices(_audioReactive);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Manual;
-        _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif — pump/kick");
+        _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif + lyres");
         Debug.Log("[PixelHubBootstrapper] Mode Audio-réactif actif (basses/kicks).");
+    }
+
+    private void SetProviderWithDevices(IStateProvider baseProvider)
+    {
+        var composite = new Laps.Core.CompositeStateProvider(baseProvider, _otherDevices);
+        _routingEngine.SetStateProvider(composite);
     }
 
     private void UpdatePreviewProvider()

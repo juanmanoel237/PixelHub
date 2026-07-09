@@ -216,21 +216,57 @@ namespace Laps.Routing
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    if (!_dmxBuffers.TryGetValue(lyreCfg.universe, out byte[] buf))
+                    int lyreControllerIndex = FindControllerIndexByIp(lyreCfg.controllerIp, config);
+                    if (lyreControllerIndex < 0) continue;
+
+                    int lyreKey = (lyreControllerIndex << 16) | (lyreCfg.universe & 0xFFFF);
+                    if (!_dmxBuffers.TryGetValue(lyreKey, out byte[] buf))
                     {
                         buf = new byte[512];
-                        _dmxBuffers[lyreCfg.universe] = buf;
+                        _dmxBuffers[lyreKey] = buf;
                     }
 
                     int ch = lyreCfg.startChannel - 1; // DMX 1-based → 0-based
-                    buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan,    0, 255);
-                    buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt,   0, 255);
-                    buf[ch + 2] = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
-                    buf[ch + 3] = lyreState.color.r;
-                    buf[ch + 4] = lyreState.color.g;
-                    buf[ch + 5] = lyreState.color.b;
-                    buf[ch + 6] = (byte)Mathf.Clamp(lyreState.strobe, 0, 255);
-                    buf[ch + 7] = (byte)Mathf.Clamp(lyreState.gobo,   0, 255);
+                    if (lyreState.lyreName == "StaticProjector")
+                    {
+                        // Projecteur statique (univers 33) : canaux 1..4 = R,G,B,W
+                        buf[ch + 0] = lyreState.color.r;
+                        buf[ch + 1] = lyreState.color.g;
+                        buf[ch + 2] = lyreState.color.b;
+                        buf[ch + 3] = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255); // dimmer utilisé comme W
+                    }
+                    else
+                    {
+                        // Moving head / lyre (mapping simplifié)
+                        buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan,    0, 255);
+                        buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt,   0, 255);
+                        byte dim = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
+                        byte stro = (byte)Mathf.Clamp(lyreState.strobe, 0, 255);
+                        byte gobo = (byte)Mathf.Clamp(lyreState.gobo,   0, 255);
+
+                        // Les lyres RGBW 13ch varient beaucoup selon le modèle.
+                        // Pour éviter "rotation OK mais pas de lumière", on écrit dimmer/couleurs
+                        // sur plusieurs layouts courants (sans toucher au pan/tilt).
+                        WriteIfInRange(buf, ch + 2, dim);                 // layout A: dimmer
+                        WriteIfInRange(buf, ch + 5, dim);                 // layout B: dimmer
+
+                        // RGB (2 layouts fréquents)
+                        WriteIfInRange(buf, ch + 3, lyreState.color.r);   // layout A: R
+                        WriteIfInRange(buf, ch + 4, lyreState.color.g);   // layout A: G
+                        WriteIfInRange(buf, ch + 5, lyreState.color.b);   // layout A: B (peut écraser dimmer B, ok)
+
+                        WriteIfInRange(buf, ch + 7, lyreState.color.r);   // layout B: R
+                        WriteIfInRange(buf, ch + 8, lyreState.color.g);   // layout B: G
+                        WriteIfInRange(buf, ch + 9, lyreState.color.b);   // layout B: B
+
+                        // Strobe (2 layouts)
+                        WriteIfInRange(buf, ch + 6, stro);                // layout A: strobe
+                        WriteIfInRange(buf, ch + 10, stro);               // layout B: strobe
+
+                        // Gobo / misc
+                        WriteIfInRange(buf, ch + 7, gobo);
+                        WriteIfInRange(buf, ch + 11, gobo);
+                    }
                 }
             }
 
@@ -271,6 +307,23 @@ namespace Laps.Routing
             foreach (var l in config.mapping.lyres)
                 if (l.name == name) return l;
             return null;
+        }
+
+        private static int FindControllerIndexByIp(string ip, AppConfig config)
+        {
+            if (string.IsNullOrEmpty(ip) || config?.network?.controllers == null) return -1;
+            for (int i = 0; i < config.network.controllers.Length; i++)
+            {
+                if (config.network.controllers[i].ip == ip) return i;
+            }
+            return -1;
+        }
+
+        private static void WriteIfInRange(byte[] buf, int index, byte value)
+        {
+            if (buf == null) return;
+            if (index < 0 || index >= buf.Length) return;
+            buf[index] = value;
         }
 
         private void OnConfigReloaded()

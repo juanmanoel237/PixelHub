@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
 
 namespace Laps.Authoring
 {
@@ -15,7 +16,8 @@ namespace Laps.Authoring
     }
 
     /// <summary>
-    /// Gère les interactions audio via le clavier : SFX, Volume Global et Pause.
+    /// Gère les interactions audio via le clavier : SFX, Volume Global et Pause (Espace).
+    /// Les flèches sont réservées au pilotage des projecteurs (OtherDevicesPanel).
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class AudioInteractiveManager : MonoBehaviour
@@ -29,77 +31,84 @@ namespace Laps.Authoring
         public float volumeStep = 0.1f;
 
         private AudioSource _sfxSource;
-        private bool _isPaused = false;
+        private PlayableDirector _director;
+        private bool _directorWasPlaying;
 
         void Awake()
         {
-            // Récupère ou ajoute automatiquement un AudioSource pour jouer les SFX
             _sfxSource = GetComponent<AudioSource>();
             _sfxSource.playOnAwake = false;
+            _director = FindObjectOfType<PlayableDirector>();
         }
 
         void Update()
         {
+            if (GlobalPause.IsPaused) return;
+
             HandleSoundEffects();
             HandleVolumeControl();
+        }
+
+        void LateUpdate()
+        {
             HandlePauseControl();
         }
 
-        /// <summary>
-        /// Joue les effets sonores assignés aux touches.
-        /// </summary>
         private void HandleSoundEffects()
         {
             foreach (var mapping in soundMappings)
             {
                 if (Input.GetKeyDown(mapping.key) && mapping.clip != null)
-                {
-                    // PlayOneShot permet de superposer les sons sans couper le précédent
                     _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
-                }
             }
         }
 
-        /// <summary>
-        /// Modifie le volume global avec les flèches Haut et Bas.
-        /// </summary>
+        /// <summary>Volume avec Page Up / Page Down (les flèches pilotent les lyres).</summary>
         private void HandleVolumeControl()
         {
-            if (Input.GetKeyDown(KeyCode.UpArrow))
+            if (Input.GetKeyDown(KeyCode.PageUp))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume + volumeStep);
-                Debug.Log($"[Audio] Volume augmenté : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
-            else if (Input.GetKeyDown(KeyCode.DownArrow))
+            else if (Input.GetKeyDown(KeyCode.PageDown))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume - volumeStep);
-                Debug.Log($"[Audio] Volume baissé : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
         }
 
-        /// <summary>
-        /// Met en pause le jeu (Audio et Visuel) avec la touche Espace.
-        /// </summary>
+        /// <summary>Espace = pause globale / reprise (musique, timeline, lyres, LEDs).</summary>
         private void HandlePauseControl()
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                _isPaused = !_isPaused;
+            if (!Input.GetKeyDown(KeyCode.Space)) return;
 
-                if (_isPaused)
+            bool pause = !GlobalPause.IsPaused;
+            GlobalPause.SetPaused(pause);
+
+            if (pause)
+            {
+                AudioListener.pause = true;
+                Time.timeScale = 0f;
+
+                if (_director != null)
                 {
-                    // Met en pause la musique globale et fige les animations (Timeline, etc.)
-                    AudioListener.pause = true;
-                    Time.timeScale = 0f;
-                    Debug.Log("[Audio] Pause ACTIVÉE");
+                    _directorWasPlaying = _director.state == PlayState.Playing;
+                    if (_directorWasPlaying)
+                        _director.Pause();
                 }
-                else
-                {
-                    // Relance la musique et le temps
-                    AudioListener.pause = false;
-                    Time.timeScale = 1f;
-                    Debug.Log("[Audio] Pause DÉSACTIVÉE");
-                }
+
+                Debug.Log("[Pause] Tout en pause (Espace pour reprendre)");
+            }
+            else
+            {
+                Time.timeScale = 1f;
+                AudioListener.pause = false;
+
+                if (_director != null && _directorWasPlaying)
+                    _director.Resume();
+
+                Debug.Log("[Pause] Lecture reprise");
             }
         }
     }
