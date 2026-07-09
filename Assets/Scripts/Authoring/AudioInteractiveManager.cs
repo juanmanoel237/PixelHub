@@ -71,8 +71,8 @@ namespace Laps.Authoring
                         Vector3 spawnPos = new Vector3(Random.Range(-5f, 5f), Random.Range(-5f, 5f), 10f);
                         GameObject vfx = Instantiate(mapping.visualPrefab, spawnPos, Quaternion.identity);
                         
-                        // Nettoyage automatique après 5 secondes pour libérer la mémoire
-                        Destroy(vfx, 5f);
+                        // Nettoyage automatique après 3 secondes (durée maximale de l'effet)
+                        Destroy(vfx, 3f);
                     }
                 }
             }
