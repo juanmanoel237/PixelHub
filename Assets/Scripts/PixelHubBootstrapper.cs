@@ -21,6 +21,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private RoutingEngine  _routingEngine;
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
+    [SerializeField] private EHubReceiver   _eHubReceiver;
 
     private LedPreviewOverlay _previewOverlay;
 
@@ -33,6 +34,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         Timeline,    // Authoring classique via ShowTimeline
         Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
+        EHub,        // Réception eHuB UDP (P7 bonus)
         Manual       // L'utilisateur choisit via l'UI
     }
 
@@ -72,6 +74,12 @@ public class PixelHubBootstrapper : MonoBehaviour
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
                 break;
 
+            case StartMode.EHub:
+                _routingEngine.SetStateProvider(_eHubReceiver);
+                _currentMode = StartMode.EHub;
+                Debug.Log("[PixelHubBootstrapper] Mode eHuB actif (réception UDP).");
+                break;
+
             case StartMode.Manual:
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
@@ -96,6 +104,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToTimeline();
         else if (Input.GetKeyDown(KeyCode.D))
             SwitchToDebug();
+        else if (Input.GetKeyDown(KeyCode.E))
+            SwitchToEHub();
         else if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
@@ -134,6 +144,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
         if (_debugPanel == null)
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
+        if (_eHubReceiver == null)
+            _eHubReceiver = GetComponent<EHubReceiver>() ?? gameObject.AddComponent<EHubReceiver>();
     }
 
     // ── API pour l'UI ─────────────────────────────────────────
@@ -161,6 +173,16 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
     }
 
+    public void SwitchToEHub()
+    {
+        _routingEngine.StopRoutingThread();
+        _routingEngine.SetStateProvider(_eHubReceiver);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.EHub;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode eHuB actif.");
+    }
+
     private void UpdatePreviewProvider()
     {
         if (_previewOverlay == null) return;
@@ -168,6 +190,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _previewOverlay.SetProvider(_showTimeline, "Timeline — le continent");
         else if (_currentMode == StartMode.Debug)
             _previewOverlay.SetProvider(_debugPanel, "Debug");
+        else if (_currentMode == StartMode.EHub)
+            _previewOverlay.SetProvider(_eHubReceiver, "eHuB — UDP");
     }
 
     public void PlayShow()    => _showTimeline?.Play();
