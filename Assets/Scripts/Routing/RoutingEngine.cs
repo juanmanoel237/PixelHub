@@ -185,26 +185,16 @@ namespace Laps.Routing
             foreach (var buf in _dmxBuffers.Values)
                 Array.Clear(buf, 0, buf.Length);
 
-            // ── 2. Écrire chaque LED dans son buffer ─────────
-            int channels = _pixelMapping.ChannelsPerLed;
-            for (int i = 0; i < state.Length && i < _pixelMapping.LedCount; i++)
+            // ── 2. Écrire l'écran LED dans les buffers DMX ─────
+            // Mode A (actuel): state indexé par pixel (Color32[])
+            // Mode B (aligné eHuB/Excel): state indexé par entité (id → couleur) via EntityMapping CSV
+            if (_stateProvider is IEntityStateProvider entityProvider && ConfigManager.EntityMap != null && ConfigManager.EntityMap.Count > 0)
             {
-                ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
-                if (addr.controllerIndex < 0) continue; // LED non mappée
-
-                // Obtenir ou créer le buffer DMX pour cet univers
-                if (!_dmxBuffers.TryGetValue(addr.universe, out byte[] buf))
-                {
-                    buf = new byte[512];
-                    _dmxBuffers[addr.universe] = buf;
-                }
-
-                Color32 c = state[i];
-                buf[addr.channel]     = c.r;
-                buf[addr.channel + 1] = c.g;
-                buf[addr.channel + 2] = c.b;
-                if (channels == 4)
-                    buf[addr.channel + 3] = 0; // Blanc = 0 par défaut
+                WriteEntitiesToDmx(entityProvider.GetEntityState(), config);
+            }
+            else
+            {
+                WritePixelsToDmx(state);
             }
 
             // ── 3. Écrire les lyres dans leurs buffers ───────
@@ -246,6 +236,59 @@ namespace Laps.Routing
                 if (string.IsNullOrEmpty(ip)) continue;
 
                 _artNetSender.SendUniverse(ip, universe, dmxData);
+            }
+        }
+
+        private void WritePixelsToDmx(Color32[] state)
+        {
+            int channels = _pixelMapping.ChannelsPerLed;
+
+            for (int i = 0; i < state.Length && i < _pixelMapping.LedCount; i++)
+            {
+                ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
+                if (addr.controllerIndex < 0) continue;
+
+                if (!_dmxBuffers.TryGetValue(addr.universe, out byte[] buf))
+                {
+                    buf = new byte[512];
+                    _dmxBuffers[addr.universe] = buf;
+                }
+
+                Color32 c = state[i];
+                buf[addr.channel]     = c.r;
+                buf[addr.channel + 1] = c.g;
+                buf[addr.channel + 2] = c.b;
+                if (channels == 4)
+                    buf[addr.channel + 3] = 0;
+            }
+        }
+
+        private void WriteEntitiesToDmx(IReadOnlyList<EntityColor> entities, AppConfig config)
+        {
+            if (entities == null || entities.Count == 0) return;
+
+            int channels = config.mapping.channelsPerLed > 0 ? config.mapping.channelsPerLed : 3;
+
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var e = entities[i];
+                if (!ConfigManager.EntityMap.TryGet(e.id, out var addr)) continue;
+
+                if (!_dmxBuffers.TryGetValue(addr.universe, out byte[] buf))
+                {
+                    buf = new byte[512];
+                    _dmxBuffers[addr.universe] = buf;
+                }
+
+                // Sécurité
+                if (addr.channel < 0 || addr.channel + 2 >= 512) continue;
+
+                Color32 c = e.color;
+                buf[addr.channel]     = c.r;
+                buf[addr.channel + 1] = c.g;
+                buf[addr.channel + 2] = c.b;
+                if (channels == 4 && addr.channel + 3 < 512)
+                    buf[addr.channel + 3] = 0;
             }
         }
 
