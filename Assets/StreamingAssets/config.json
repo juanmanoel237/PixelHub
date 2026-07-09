@@ -3,8 +3,23 @@
     "controllers": [
       {
         "ip": "192.168.1.45",
-        "startUniverse": 1,
-        "universeCount": 386
+        "startUniverse": 0,
+        "universeCount": 32
+      },
+      {
+        "ip": "192.168.1.46",
+        "startUniverse": 32,
+        "universeCount": 32
+      },
+      {
+        "ip": "192.168.1.47",
+        "startUniverse": 64,
+        "universeCount": 32
+      },
+      {
+        "ip": "192.168.1.48",
+        "startUniverse": 96,
+        "universeCount": 32
       }
     ],
     "eHubPort": 9000,
