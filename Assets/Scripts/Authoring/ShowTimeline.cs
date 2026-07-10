@@ -284,7 +284,10 @@ namespace Laps.Authoring
             _screenHeight = cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 130;
             _state       = new Color32[_ledCount];
             _layerBuffer = new Color32[_ledCount];
-            _lyreStates  = new LyreState[cfg.mapping.lyres?.Length ?? 0];
+            int lyreCount = cfg.mapping.lyres?.Length ?? 0;
+            _lyreStates  = new LyreState[lyreCount];
+            for (int i = 0; i < lyreCount; i++)
+                _lyreStates[i] = new LyreState { lyreName = cfg.mapping.lyres[i].name };
             FillBlack();
         }
     }

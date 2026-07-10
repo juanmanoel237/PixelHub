@@ -25,7 +25,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private EHubReceiver   _eHubReceiver;
     [SerializeField] private AudioReactiveProvider _audioReactive;
     [SerializeField] private VideoCaptureProvider _videoCapture;
-
+    [SerializeField] private OtherDevicesPanel _otherDevices;
     private EHubNetworkBridge _eHub;
     private LedPreviewOverlay _previewOverlay;
 
@@ -69,20 +69,20 @@ public class PixelHubBootstrapper : MonoBehaviour
             case StartMode.Timeline:
                 _showTimeline.LoadShow();
                 _showTimeline.Play();
-                _routingEngine.SetStateProvider(_showTimeline);
+                SetProviderWithDevices(_showTimeline);
                 _currentMode = StartMode.Timeline;
                 Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
                 break;
 
             case StartMode.Debug:
-                _routingEngine.SetStateProvider(_debugPanel);
+                SetProviderWithDevices(_debugPanel);
                 _debugPanel.SetFakeStateActive(true);
                 _currentMode = StartMode.Debug;
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
                 break;
 
             case StartMode.EHub:
-                _routingEngine.SetStateProvider(_eHubReceiver);
+                SetProviderWithDevices(_eHubReceiver);
                 _currentMode = StartMode.EHub;
                 Debug.Log("[PixelHubBootstrapper] Mode eHuB actif (réception UDP).");
                 break;
@@ -212,6 +212,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
         if (_videoCapture == null)
             _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_otherDevices == null)
+            _otherDevices = GetComponent<OtherDevicesPanel>() ?? gameObject.AddComponent<OtherDevicesPanel>();
     }
 
     public void SwitchToTimeline()
@@ -219,7 +221,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         _routingEngine.StopRoutingThread();
         _showTimeline.LoadShow();
         _showTimeline.Play();
-        _routingEngine.SetStateProvider(_showTimeline);
+        SetProviderWithDevices(_showTimeline);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Timeline;
         SyncPreview(_showTimeline, "Timeline");
@@ -230,7 +232,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         _routingEngine.StopRoutingThread();
         _debugPanel.SetFakeStateActive(true);
-        _routingEngine.SetStateProvider(_debugPanel);
+        SetProviderWithDevices(_debugPanel);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Debug;
         SyncPreview(_debugPanel, "Debug");
@@ -240,7 +242,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     public void SwitchToEHub()
     {
         _routingEngine.StopRoutingThread();
-        _routingEngine.SetStateProvider(_eHubReceiver);
+        SetProviderWithDevices(_eHubReceiver);
         _routingEngine.StartRouting();
         _currentMode = StartMode.EHub;
         UpdatePreviewProvider();
@@ -263,7 +265,7 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         _audioReactive?.ResetIntro();
 
-        _routingEngine.SetStateProvider(_audioReactive);
+        SetProviderWithDevices(_audioReactive);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Manual;
         SyncPreview(_audioReactive, "Audio-reactif — pump/kick");
@@ -276,11 +278,17 @@ public class PixelHubBootstrapper : MonoBehaviour
         if (_videoCapture == null) return;
 
         _routingEngine.StopRoutingThread();
-        _routingEngine.SetStateProvider(_videoCapture);
+        SetProviderWithDevices(_videoCapture);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Manual;
         SyncPreview(_videoCapture, "Video Capture (Feux d'artifice)");
         Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
+    }
+
+    private void SetProviderWithDevices(IStateProvider baseProvider)
+    {
+        var composite = new Laps.Core.CompositeStateProvider(baseProvider, _otherDevices);
+        _routingEngine.SetStateProvider(composite);
     }
 
     private void UpdatePreviewProvider()
