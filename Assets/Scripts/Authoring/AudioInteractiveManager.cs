@@ -1,9 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
-<<<<<<< HEAD
-=======
 using UnityEngine.Playables;
->>>>>>> origin/Feat/key-effect-synchronization
 using Laps.Core;
 
 namespace Laps.Authoring
@@ -17,15 +14,8 @@ namespace Laps.Authoring
         public KeyCode key;
         public AudioClip clip;
         [Range(0f, 1f)] public float volume = 1f;
-<<<<<<< HEAD
-        
         [Header("Effet Visuel LED (Optionnel)")]
         [Tooltip("Prefab avec ProceduralFirework pour choisir le style (dessiné sur la grille LED).")]
-=======
-
-        [Header("Effet Visuel (Optionnel)")]
-        [Tooltip("Prefab VFX (ex: Système de particules de feu d'artifice) à faire apparaître lors de l'appui.")]
->>>>>>> origin/Feat/key-effect-synchronization
         public GameObject visualPrefab;
     }
 
@@ -96,12 +86,15 @@ namespace Laps.Authoring
             if (mapping.clip != null)
                 _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
 
+            // 2. Feu d'artifice sur la grille LED (mur + aperçu), pas en 3D dans la scène
+            FireworkStyle style = FireworkStyle.ClassicNova;
             if (mapping.visualPrefab != null)
             {
-                Vector3 spawnPos = new Vector3(Random.Range(-5f, 5f), Random.Range(-5f, 5f), 10f);
-                GameObject vfx = Instantiate(mapping.visualPrefab, spawnPos, Quaternion.identity);
-                Destroy(vfx, 3f);
+                var procedural = mapping.visualPrefab.GetComponent<ProceduralFirework>();
+                if (procedural != null)
+                    style = procedural.style;
             }
+            LedFireworks.Trigger(style);
 
             if (!fromNetwork)
                 EHubSyncBus.PublishLocal(new EHubMessage
@@ -115,30 +108,8 @@ namespace Laps.Authoring
         {
             for (int i = 0; i < soundMappings.Count; i++)
             {
-<<<<<<< HEAD
-                if (Input.GetKeyDown(mapping.key))
-                {
-                    // 1. Jouer le son
-                    if (mapping.clip != null)
-                    {
-                        Debug.Log($"[AudioInteractive] Key={mapping.key} clip={mapping.clip.name} vol={mapping.volume} listenerPause={AudioListener.pause} listenerVol={AudioListener.volume}");
-                        _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
-                    }
-                    
-                    // 2. Feu d'artifice sur la grille LED (mur + aperçu), pas en 3D dans la scène
-                    FireworkStyle style = FireworkStyle.ClassicNova;
-                    if (mapping.visualPrefab != null)
-                    {
-                        var procedural = mapping.visualPrefab.GetComponent<ProceduralFirework>();
-                        if (procedural != null)
-                            style = procedural.style;
-                    }
-                    LedFireworks.Trigger(style);
-                }
-=======
                 if (Input.GetKeyDown(soundMappings[i].key))
                     TriggerEffect(i, fromNetwork: false);
->>>>>>> origin/Feat/key-effect-synchronization
             }
         }
 
