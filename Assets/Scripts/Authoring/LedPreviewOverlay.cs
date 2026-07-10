@@ -29,7 +29,15 @@ namespace Laps.Authoring
         public void SetProvider(IStateProvider provider, string modeLabel)
         {
             _provider = provider;
-            _modeLabel = modeLabel;
+            _modeLabel = modeLabel ?? "—";
+            _refreshTimer = 0f;
+            ForceRefresh();
+        }
+
+        /// <summary>Rafraîchit tout de suite l'aperçu (sync eHub / changement de mode).</summary>
+        public void ForceRefresh()
+        {
+            RefreshPreview();
         }
 
         private void Awake()
@@ -56,7 +64,8 @@ namespace Laps.Authoring
 
         private void Update()
         {
-            _refreshTimer += Time.deltaTime;
+            // unscaledDeltaTime : l'aperçu continue même en pause (sync eHub)
+            _refreshTimer += Time.unscaledDeltaTime;
             if (_refreshTimer < 0.05f) return;
             _refreshTimer = 0f;
             RefreshPreview();

@@ -135,6 +135,7 @@ public class EHubNetworkBridge : MonoBehaviour
             }
 
             Debug.Log($"[eHub] ← {msg.type} (de {msg.senderId})");
+            _bootstrap?.RefreshDisplay();
         }
         finally
         {

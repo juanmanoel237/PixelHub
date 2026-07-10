@@ -110,6 +110,7 @@ namespace Laps.Authoring
             _fakeColor = color;
             _firstLedOnly = true;
             _fakeStateActive = true;
+            UpdateFakeState();
             Debug.Log($"[DebugPanel] Test 1ère LED : {color}");
         }
 
@@ -120,6 +121,7 @@ namespace Laps.Authoring
             _fakeEffect = EffectType.SolidColor;
             _firstLedOnly = false;
             _fakeStateActive = true;
+            UpdateFakeState();
             Debug.Log($"[DebugPanel] Couleur test envoyée : {color}");
         }
 
