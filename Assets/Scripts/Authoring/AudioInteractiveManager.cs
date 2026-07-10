@@ -61,6 +61,7 @@ namespace Laps.Authoring
                     // 1. Jouer le son
                     if (mapping.clip != null)
                     {
+                        Debug.Log($"[AudioInteractive] Key={mapping.key} clip={mapping.clip.name} vol={mapping.volume} listenerPause={AudioListener.pause} listenerVol={AudioListener.volume}");
                         _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
                     }
                     

@@ -27,6 +27,8 @@ namespace Laps.Authoring
         [SerializeField] private AudioSource _audioSource;
         [Tooltip("Si aucun AudioSource n'est trouvé, analyse le mix global (AudioListener). Recommandé avec Timeline.")]
         [SerializeField] private bool _useAudioListenerWhenNoSource = true;
+        [Tooltip("Évite de relancer automatiquement l'AudioSource (sinon doublon possible avec Timeline/PlayableDirector).")]
+        [SerializeField] private bool _autoPlayAudioSource = false;
 
         [Header("Changement d'effets (show)")]
         [SerializeField] private bool _autoCycleEffects = true;
@@ -272,7 +274,7 @@ namespace Laps.Authoring
             float voice = 0f;
             if (_audioSource != null)
             {
-                if (!_audioSource.isPlaying && _audioSource.clip != null)
+                if (_autoPlayAudioSource && !_audioSource.isPlaying && _audioSource.clip != null)
                     _audioSource.Play();
 
                 _audioSource.GetSpectrumData(_spectrum, 0, _fftWindow);
