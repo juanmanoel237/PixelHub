@@ -278,7 +278,7 @@ namespace Laps.Core
             return ips.Count == 0 ? "en attente…" : string.Join(", ", ips);
         }
 
-        private static long NowMs() => Environment.TickCount64;
+        private static long NowMs() => DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
 
         public void Dispose()
         {

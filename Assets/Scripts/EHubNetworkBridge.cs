@@ -39,6 +39,7 @@ public class EHubNetworkBridge : MonoBehaviour
     {
         if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
         EHubSyncBus.RegisterSendHandler(msg => Send(msg));
+        EHubStatus.Update(true, false, EHubRole.Solo, "", 1);
     }
 
     private void OnDestroy()
@@ -94,6 +95,13 @@ public class EHubNetworkBridge : MonoBehaviour
 
         while (_transport.TryDequeue(out EHubMessage msg))
             ApplyRemote(msg);
+
+        EHubStatus.Update(
+            _syncEnabled,
+            _transport.IsConnected,
+            _transport.Role,
+            _transport.HostIp,
+            _transport.TotalPostes);
     }
 
     private void Send(EHubMessage msg)

@@ -136,14 +136,13 @@ namespace Laps.Authoring
                 y += 18;
             }
 
-            var eHub = FindObjectOfType<EHubNetworkBridge>();
-            if (eHub != null && eHub.IsEnabled)
+            if (EHubStatus.Enabled)
             {
-                if (eHub.IsConnected)
+                if (EHubStatus.Connected)
                 {
-                    string role = eHub.Role == EHubRole.Host ? "Hôte" : $"Client → {eHub.HostIp}";
+                    string role = EHubStatus.Role == EHubRole.Host ? "Hôte" : $"Client → {EHubStatus.HostIp}";
                     GUI.Label(new Rect(margin + 8, y, 244, 18),
-                        $"eHub {role} — {eHub.TotalPostes} poste(s)");
+                        $"eHub {role} — {EHubStatus.TotalPostes} poste(s)");
                 }
                 else
                     GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — connectez-vous (panneau bas)");
