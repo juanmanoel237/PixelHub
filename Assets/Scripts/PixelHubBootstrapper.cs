@@ -25,6 +25,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private AudioReactiveProvider _audioReactive;
     [SerializeField] private VideoCaptureProvider _videoCapture;
 
+    private EHubNetworkBridge _eHub;
     private LedPreviewOverlay _previewOverlay;
 
     [Header("Mode de démarrage")]
@@ -42,8 +43,10 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     private void Awake()
     {
-        // Auto-câblage si la scène n'a que ConfigManager (cas actuel du projet)
         EnsureComponents();
+        _eHub = GetComponent<EHubNetworkBridge>() ?? gameObject.AddComponent<EHubNetworkBridge>();
+        if (GetComponent<EHubControlPanel>() == null)
+            gameObject.AddComponent<EHubControlPanel>();
     }
 
     private void Start()
@@ -96,44 +99,83 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif | V=video-capture");
+        Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
     }
 
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.T))
-            SwitchToTimeline();
+            RequestSwitchMode(StartMode.Timeline);
         else if (Input.GetKeyDown(KeyCode.D))
-            SwitchToDebug();
-        // AZERTY : la touche "A" correspond souvent à KeyCode.Q
+            RequestSwitchMode(StartMode.Debug);
         else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
-            SwitchToAudioReactive();
+            RequestSwitchMode(StartMode.Manual);
         else if (Input.GetKeyDown(KeyCode.V))
-            SwitchToVideoCapture();
+            RequestSwitchMode(StartMode.VideoCapture);
         else if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendFirstLedTest(Color.red);
-            _previewOverlay?.SetProvider(_debugPanel, "Debug — 1ère LED rouge");
-        }
+            RequestDebugColor(EHubDebugColor.FirstLed);
         else if (Input.GetKeyDown(KeyCode.R))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.red);
-        }
+            RequestDebugColor(EHubDebugColor.Red);
         else if (Input.GetKeyDown(KeyCode.G))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.green);
-        }
+            RequestDebugColor(EHubDebugColor.Green);
         else if (Input.GetKeyDown(KeyCode.B))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.blue);
-        }
+            RequestDebugColor(EHubDebugColor.Blue);
         else if (Input.GetKeyDown(KeyCode.Alpha0))
+            RequestDebugColor(EHubDebugColor.BlackOut);
+    }
+
+    /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+    public void RequestSwitchMode(StartMode mode)
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.SwitchMode, intArg = (int)mode });
+        ApplySwitchMode(mode);
+    }
+
+    /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+    public void RequestDebugColor(int colorCode)
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DebugColor, intArg = colorCode });
+        ApplyDebugColor(colorCode);
+    }
+
+    /// <summary>Appelé localement ou via eHub (autre poste).</summary>
+    public void ApplySwitchMode(StartMode mode)
+    {
+        switch (mode)
         {
-            SwitchToDebug();
-            _debugPanel?.SendBlackOut();
+            case StartMode.Timeline:      SwitchToTimeline(); break;
+            case StartMode.Debug:         SwitchToDebug(); break;
+            case StartMode.Manual:        SwitchToAudioReactive(); break;
+            case StartMode.VideoCapture:  SwitchToVideoCapture(); break;
+        }
+    }
+
+    /// <summary>Appelé localement ou via eHub (autre poste).</summary>
+    public void ApplyDebugColor(int colorCode)
+    {
+        switch (colorCode)
+        {
+            case EHubDebugColor.Red:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.red);
+                break;
+            case EHubDebugColor.Green:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.green);
+                break;
+            case EHubDebugColor.Blue:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.blue);
+                break;
+            case EHubDebugColor.BlackOut:
+                SwitchToDebug();
+                _debugPanel?.SendBlackOut();
+                break;
+            case EHubDebugColor.FirstLed:
+                SwitchToDebug();
+                _debugPanel?.SendFirstLedTest(Color.red);
+                _previewOverlay?.SetProvider(_debugPanel, "Debug — 1ère LED rouge");
+                break;
         }
     }
 

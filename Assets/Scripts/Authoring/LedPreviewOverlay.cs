@@ -136,6 +136,20 @@ namespace Laps.Authoring
                 y += 18;
             }
 
+            var eHub = FindObjectOfType<EHubNetworkBridge>();
+            if (eHub != null && eHub.IsEnabled)
+            {
+                if (eHub.IsConnected)
+                {
+                    string role = eHub.Role == EHubRole.Host ? "Hôte" : $"Client → {eHub.HostIp}";
+                    GUI.Label(new Rect(margin + 8, y, 244, 18),
+                        $"eHub {role} — {eHub.TotalPostes} poste(s)");
+                }
+                else
+                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — connectez-vous (panneau bas)");
+                y += 18;
+            }
+
             if (ConfigManager.Config?.network.controllers?.Length > 0)
             {
                 var c = ConfigManager.Config.network.controllers[0];
@@ -150,7 +164,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 28, Screen.width - margin * 2, 22),
-                "Onglet GAME (pas Scene). Touches : 1 / R / G / B / 0 / T / A (audio)");
+                "Panneau eHub en bas : Hôte OU saisir IP + Connecter.");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
