@@ -22,8 +22,11 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private RoutingEngine  _routingEngine;
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
+    [SerializeField] private EHubReceiver   _eHubReceiver;
     [SerializeField] private AudioReactiveProvider _audioReactive;
-
+    [SerializeField] private VideoCaptureProvider _videoCapture;
+    [SerializeField] private OtherDevicesPanel _otherDevices;
+    private EHubNetworkBridge _eHub;
     private LedPreviewOverlay _previewOverlay;
 
     [Header("Mode de démarrage")]
@@ -33,100 +36,164 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     public enum StartMode
     {
-        Timeline,    // Authoring classique via ShowTimeline
-        Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
-        Manual       // L'utilisateur choisit via l'UI
+        Timeline,     // Authoring classique via ShowTimeline
+        Debug,        // Fake state via DebugPanel (pour tester les contrôleurs)
+        EHub,         // Réception eHuB UDP (P7 bonus)
+        Manual,       // L'utilisateur choisit via l'UI
+        VideoCapture  // Démarre directement sur la caméra
     }
 
     private void Awake()
     {
-        // Auto-câblage si la scène n'a que ConfigManager (cas actuel du projet)
         EnsureComponents();
+        _eHub = GetComponent<EHubNetworkBridge>() ?? gameObject.AddComponent<EHubNetworkBridge>();
+        if (GetComponent<EHubControlPanel>() == null)
+            gameObject.AddComponent<EHubControlPanel>();
+
+        _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
+        _previewOverlay.Init(_routingEngine);
     }
 
     private void Start()
     {
-        // La config est chargée par ConfigManager.Awake() — on attend juste qu'elle soit prête
         if (ConfigManager.Config == null)
         {
             Debug.LogError("[PixelHubBootstrapper] ConfigManager non trouvé ou config non chargée !");
             return;
         }
 
-        // Connecter le DebugPanel au RoutingEngine
         _debugPanel?.SetRoutingEngine(_routingEngine);
 
-        // Choisir le state provider selon le mode
         switch (_startMode)
         {
             case StartMode.Timeline:
                 _showTimeline.LoadShow();
                 _showTimeline.Play();
-                _routingEngine.SetStateProvider(_showTimeline);
+                SetProviderWithDevices(_showTimeline);
                 _currentMode = StartMode.Timeline;
                 Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
                 break;
 
             case StartMode.Debug:
-                _routingEngine.SetStateProvider(_debugPanel);
+                SetProviderWithDevices(_debugPanel);
                 _debugPanel.SetFakeStateActive(true);
                 _currentMode = StartMode.Debug;
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
+                break;
+
+            case StartMode.EHub:
+                SetProviderWithDevices(_eHubReceiver);
+                _currentMode = StartMode.EHub;
+                Debug.Log("[PixelHubBootstrapper] Mode eHuB actif (réception UDP).");
                 break;
 
             case StartMode.Manual:
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
+
+            case StartMode.VideoCapture:
+                _showTimeline.LoadShow();
+                _showTimeline.Play();
+                SwitchToVideoCapture();
+                break;
         }
 
-        // Démarrer le thread de routage
         _routingEngine.StartRouting();
 
-        // Prévisualisation à l'écran (onglet Game)
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
+        Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
     }
 
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.T))
-            SwitchToTimeline();
+            RequestSwitchMode(StartMode.Timeline);
         else if (Input.GetKeyDown(KeyCode.D))
-            SwitchToDebug();
-        // AZERTY : la touche "A" correspond souvent à KeyCode.Q
+            RequestSwitchMode(StartMode.Debug);
+        else if (Input.GetKeyDown(KeyCode.E))
+            RequestSwitchMode(StartMode.EHub);
         else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
-            SwitchToAudioReactive();
+            RequestSwitchMode(StartMode.Manual);
+        else if (Input.GetKeyDown(KeyCode.V))
+            RequestSwitchMode(StartMode.VideoCapture);
         else if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendFirstLedTest(Color.red);
-            _previewOverlay?.SetProvider(_debugPanel, "Debug — 1ère LED rouge");
-        }
+            RequestDebugColor(EHubDebugColor.FirstLed);
         else if (Input.GetKeyDown(KeyCode.R))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.red);
-        }
+            RequestDebugColor(EHubDebugColor.Red);
         else if (Input.GetKeyDown(KeyCode.G))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.green);
-        }
+            RequestDebugColor(EHubDebugColor.Green);
         else if (Input.GetKeyDown(KeyCode.B))
-        {
-            SwitchToDebug();
-            _debugPanel?.SendTestColor(Color.blue);
-        }
+            RequestDebugColor(EHubDebugColor.Blue);
         else if (Input.GetKeyDown(KeyCode.Alpha0))
+            RequestDebugColor(EHubDebugColor.BlackOut);
+    }
+
+    /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+    public void RequestSwitchMode(StartMode mode)
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.SwitchMode, intArg = (int)mode });
+        ApplySwitchMode(mode);
+    }
+
+    /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+    public void RequestDebugColor(int colorCode)
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DebugColor, intArg = colorCode });
+        ApplyDebugColor(colorCode);
+    }
+
+    /// <summary>Appelé localement ou via eHub (autre poste).</summary>
+    public void ApplySwitchMode(StartMode mode)
+    {
+        switch (mode)
         {
-            SwitchToDebug();
-            _debugPanel?.SendBlackOut();
+            case StartMode.Timeline:      SwitchToTimeline(); break;
+            case StartMode.Debug:         SwitchToDebug(); break;
+            case StartMode.Manual:        SwitchToAudioReactive(); break;
+            case StartMode.VideoCapture:  SwitchToVideoCapture(); break;
+            case StartMode.EHub:          SwitchToEHub(); break;
         }
+        RefreshDisplay();
+    }
+
+    /// <summary>Appelé localement ou via eHub (autre poste).</summary>
+    public void ApplyDebugColor(int colorCode)
+    {
+        switch (colorCode)
+        {
+            case EHubDebugColor.Red:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.red);
+                SyncPreview(_debugPanel, "Debug — Rouge");
+                break;
+            case EHubDebugColor.Green:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.green);
+                SyncPreview(_debugPanel, "Debug — Vert");
+                break;
+            case EHubDebugColor.Blue:
+                SwitchToDebug();
+                _debugPanel?.SendTestColor(Color.blue);
+                SyncPreview(_debugPanel, "Debug — Bleu");
+                break;
+            case EHubDebugColor.BlackOut:
+                SwitchToDebug();
+                _debugPanel?.SendBlackOut();
+                SyncPreview(_debugPanel, "Debug — Off");
+                break;
+            case EHubDebugColor.FirstLed:
+                SwitchToDebug();
+                _debugPanel?.SendFirstLedTest(Color.red);
+                SyncPreview(_debugPanel, "Debug — 1ère LED rouge");
+                break;
+        }
+        RefreshDisplay();
     }
 
     private void EnsureComponents()
@@ -139,21 +206,25 @@ public class PixelHubBootstrapper : MonoBehaviour
             _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
         if (_debugPanel == null)
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
+        if (_eHubReceiver == null)
+            _eHubReceiver = GetComponent<EHubReceiver>() ?? gameObject.AddComponent<EHubReceiver>();
         if (_audioReactive == null)
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
+        if (_videoCapture == null)
+            _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_otherDevices == null)
+            _otherDevices = GetComponent<OtherDevicesPanel>() ?? gameObject.AddComponent<OtherDevicesPanel>();
     }
-
-    // ── API pour l'UI ─────────────────────────────────────────
 
     public void SwitchToTimeline()
     {
         _routingEngine.StopRoutingThread();
         _showTimeline.LoadShow();
         _showTimeline.Play();
-        _routingEngine.SetStateProvider(_showTimeline);
+        SetProviderWithDevices(_showTimeline);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Timeline;
-        UpdatePreviewProvider();
+        SyncPreview(_showTimeline, "Timeline");
         Debug.Log("[PixelHubBootstrapper] Mode Timeline actif.");
     }
 
@@ -161,18 +232,27 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         _routingEngine.StopRoutingThread();
         _debugPanel.SetFakeStateActive(true);
-        _routingEngine.SetStateProvider(_debugPanel);
+        SetProviderWithDevices(_debugPanel);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Debug;
-        UpdatePreviewProvider();
+        SyncPreview(_debugPanel, "Debug");
         Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
+    }
+
+    public void SwitchToEHub()
+    {
+        _routingEngine.StopRoutingThread();
+        SetProviderWithDevices(_eHubReceiver);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.EHub;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode eHuB actif.");
     }
 
     public void SwitchToAudioReactive()
     {
         _routingEngine.StopRoutingThread();
 
-        // Relier l'AudioSource de ShowDirector (Unity Timeline) et relancer la musique
         var director = FindObjectOfType<PlayableDirector>();
         if (director != null)
         {
@@ -185,20 +265,52 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         _audioReactive?.ResetIntro();
 
-        _routingEngine.SetStateProvider(_audioReactive);
+        SetProviderWithDevices(_audioReactive);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Manual;
-        _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif — pump/kick");
+        SyncPreview(_audioReactive, "Audio-reactif — pump/kick");
         Debug.Log("[PixelHubBootstrapper] Mode Audio-réactif actif (basses/kicks).");
+    }
+
+    public void SwitchToVideoCapture()
+    {
+        if (_videoCapture == null) _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_videoCapture == null) return;
+
+        _routingEngine.StopRoutingThread();
+        SetProviderWithDevices(_videoCapture);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Manual;
+        SyncPreview(_videoCapture, "Video Capture (Feux d'artifice)");
+        Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
+    }
+
+    private void SetProviderWithDevices(IStateProvider baseProvider)
+    {
+        var composite = new Laps.Core.CompositeStateProvider(baseProvider, _otherDevices);
+        _routingEngine.SetStateProvider(composite);
     }
 
     private void UpdatePreviewProvider()
     {
-        if (_previewOverlay == null) return;
         if (_currentMode == StartMode.Timeline)
-            _previewOverlay.SetProvider(_showTimeline, "Timeline");
+            SyncPreview(_showTimeline, "Timeline");
         else if (_currentMode == StartMode.Debug)
-            _previewOverlay.SetProvider(_debugPanel, "Debug");
+            SyncPreview(_debugPanel, "Debug");
+        else if (_currentMode == StartMode.EHub)
+            SyncPreview(_eHubReceiver, "eHuB — UDP");
+    }
+
+    private void SyncPreview(IStateProvider provider, string label)
+    {
+        if (_previewOverlay == null || provider == null) return;
+        _previewOverlay.SetProvider(provider, label);
+    }
+
+    /// <summary>Force la mise à jour de l'aperçu Game sur ce poste (sync eHub).</summary>
+    public void RefreshDisplay()
+    {
+        _previewOverlay?.ForceRefresh();
     }
 
     public void PlayShow()    => _showTimeline?.Play();

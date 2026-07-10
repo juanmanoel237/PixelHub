@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
+using Laps.Core;
 
 namespace Laps.Authoring
 {
@@ -12,94 +14,154 @@ namespace Laps.Authoring
         public KeyCode key;
         public AudioClip clip;
         [Range(0f, 1f)] public float volume = 1f;
+        [Header("Effet Visuel LED (Optionnel)")]
+        [Tooltip("Prefab avec ProceduralFirework pour choisir le style (dessiné sur la grille LED).")]
+        public GameObject visualPrefab;
     }
 
     /// <summary>
     /// Gère les interactions audio via le clavier : SFX, Volume Global et Pause.
+    /// Les actions sont synchronisées entre postes via eHub (UDP).
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class AudioInteractiveManager : MonoBehaviour
     {
         [Header("Effets Sonores (SFX)")]
-        [Tooltip("Liste des sons à jouer selon la touche pressée.")]
         public List<KeySoundMapping> soundMappings = new List<KeySoundMapping>();
 
         [Header("Paramètres Volume")]
-        [Tooltip("Le pas de changement du volume (ex: 0.1 pour 10%)")]
         public float volumeStep = 0.1f;
 
         private AudioSource _sfxSource;
-        private bool _isPaused = false;
+        private PlayableDirector _director;
+        private bool _isPaused;
+        private bool _directorWasPlaying;
+
+        public bool IsPaused => _isPaused;
 
         void Awake()
         {
-            // Récupère ou ajoute automatiquement un AudioSource pour jouer les SFX
             _sfxSource = GetComponent<AudioSource>();
             _sfxSource.playOnAwake = false;
+            _director = FindObjectOfType<PlayableDirector>();
         }
+
+        void Start() { }
 
         void Update()
         {
-            HandleSoundEffects();
-            HandleVolumeControl();
+            if (!_isPaused)
+            {
+                HandleSoundEffects();
+                HandleVolumeControl();
+            }
             HandlePauseControl();
         }
 
-        /// <summary>
-        /// Joue les effets sonores assignés aux touches.
-        /// </summary>
+        /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+        public void RequestTriggerEffect(int mappingIndex)
+        {
+            TriggerEffect(mappingIndex, fromNetwork: false);
+        }
+
+        /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
+        public void RequestPauseToggle()
+        {
+            bool pause = !_isPaused;
+            SetPaused(pause, fromNetwork: false);
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.PauseState,
+                intArg = pause ? 1 : 0
+            });
+        }
+
+        /// <summary>Déclenche un effet (son + VFX). Appelé localement ou depuis eHub.</summary>
+        public void TriggerEffect(int mappingIndex, bool fromNetwork = false)
+        {
+            if (mappingIndex < 0 || mappingIndex >= soundMappings.Count) return;
+
+            var mapping = soundMappings[mappingIndex];
+
+            if (mapping.clip != null)
+                _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
+
+            // 2. Feu d'artifice sur la grille LED (mur + aperçu), pas en 3D dans la scène
+            FireworkStyle style = FireworkStyle.ClassicNova;
+            if (mapping.visualPrefab != null)
+            {
+                var procedural = mapping.visualPrefab.GetComponent<ProceduralFirework>();
+                if (procedural != null)
+                    style = procedural.style;
+            }
+            LedFireworks.Trigger(style);
+
+            if (!fromNetwork)
+                EHubSyncBus.PublishLocal(new EHubMessage
+                {
+                    type = EHubMessageTypes.SfxTrigger,
+                    intArg = mappingIndex
+                });
+        }
+
         private void HandleSoundEffects()
         {
-            foreach (var mapping in soundMappings)
+            for (int i = 0; i < soundMappings.Count; i++)
             {
-                if (Input.GetKeyDown(mapping.key) && mapping.clip != null)
-                {
-                    // PlayOneShot permet de superposer les sons sans couper le précédent
-                    _sfxSource.PlayOneShot(mapping.clip, mapping.volume);
-                }
+                if (Input.GetKeyDown(soundMappings[i].key))
+                    TriggerEffect(i, fromNetwork: false);
             }
         }
 
-        /// <summary>
-        /// Modifie le volume global avec les flèches Haut et Bas.
-        /// </summary>
         private void HandleVolumeControl()
         {
-            if (Input.GetKeyDown(KeyCode.UpArrow))
+            if (Input.GetKeyDown(KeyCode.PageUp))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume + volumeStep);
-                Debug.Log($"[Audio] Volume augmenté : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
-            else if (Input.GetKeyDown(KeyCode.DownArrow))
+            else if (Input.GetKeyDown(KeyCode.PageDown))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume - volumeStep);
-                Debug.Log($"[Audio] Volume baissé : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
         }
 
-        /// <summary>
-        /// Met en pause le jeu (Audio et Visuel) avec la touche Espace.
-        /// </summary>
         private void HandlePauseControl()
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                _isPaused = !_isPaused;
+            if (!Input.GetKeyDown(KeyCode.Space)) return;
+            RequestPauseToggle();
+        }
 
-                if (_isPaused)
+        /// <summary>Pause/play global. Appelé localement ou depuis eHub.</summary>
+        public void SetPaused(bool paused, bool fromNetwork = false)
+        {
+            if (_isPaused == paused) return;
+            _isPaused = paused;
+
+            if (paused)
+            {
+                AudioListener.pause = true;
+                Time.timeScale = 0f;
+
+                if (_director != null)
                 {
-                    // Met en pause la musique globale et fige les animations (Timeline, etc.)
-                    AudioListener.pause = true;
-                    Time.timeScale = 0f;
-                    Debug.Log("[Audio] Pause ACTIVÉE");
+                    _directorWasPlaying = _director.state == PlayState.Playing;
+                    if (_directorWasPlaying)
+                        _director.Pause();
                 }
-                else
-                {
-                    // Relance la musique et le temps
-                    AudioListener.pause = false;
-                    Time.timeScale = 1f;
-                    Debug.Log("[Audio] Pause DÉSACTIVÉE");
-                }
+
+                Debug.Log("[Pause] Tout en pause");
+            }
+            else
+            {
+                Time.timeScale = 1f;
+                AudioListener.pause = false;
+
+                if (_director != null && _directorWasPlaying)
+                    _director.Resume();
+
+                Debug.Log("[Pause] Lecture reprise");
             }
         }
     }

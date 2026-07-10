@@ -62,6 +62,8 @@ namespace Laps.Authoring
         [Header("Show")]
         [SerializeField] private AudioSource _audioSource;
         [SerializeField] private string _showFileName = "show.json";
+        [Tooltip("Si la musique est déjà gérée par un PlayableDirector/Timeline, laisse cette option désactivée pour éviter un doublon.")]
+        [SerializeField] private bool _playAudioOnPlay = false;
 
         // ── État interne ────────────────────────────────────────
         private ShowData _showData;
@@ -112,7 +114,7 @@ namespace Laps.Authoring
         public void Play()
         {
             IsPlaying = true;
-            if (_audioSource != null) _audioSource.Play();
+            if (_playAudioOnPlay && _audioSource != null) _audioSource.Play();
             Debug.Log("[ShowTimeline] Lecture démarrée.");
         }
 
@@ -282,7 +284,10 @@ namespace Laps.Authoring
             _screenHeight = cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 130;
             _state       = new Color32[_ledCount];
             _layerBuffer = new Color32[_ledCount];
-            _lyreStates  = new LyreState[cfg.mapping.lyres?.Length ?? 0];
+            int lyreCount = cfg.mapping.lyres?.Length ?? 0;
+            _lyreStates  = new LyreState[lyreCount];
+            for (int i = 0; i < lyreCount; i++)
+                _lyreStates[i] = new LyreState { lyreName = cfg.mapping.lyres[i].name };
             FillBlack();
         }
     }

@@ -143,10 +143,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Laps.Authoring::Laps.Authoring.AudioInteractiveManager
   soundMappings:
-  - key: 97
+  - key: 119
     clip: {fileID: 8300000, guid: d792bff0a34914d4fab6ee5c3b1dad1a, type: 3}
-    volume: 0
-  - key: 122
+    volume: 1
+    visualPrefab: {fileID: 1128073350909929431, guid: e8abb6eec31b31443917f019d5a347e6, type: 3}
+  - key: 120
     clip: {fileID: 8300000, guid: 4a370907d996f6b4184f2a514aff6e1e, type: 3}
-    volume: 0
+    volume: 1
+    visualPrefab: {fileID: 6797760374518579232, guid: 43c162ff118a794459062a56ef1153ba, type: 3}
   volumeStep: 0.1

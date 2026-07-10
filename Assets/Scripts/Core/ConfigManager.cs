@@ -23,7 +23,6 @@ namespace Laps.Core
         public string controllerIp;
         public int universe;
         public int startChannel;    // Canal DMX de départ (1-512)
-        // Canaux DMX standard pour lyre : pan, tilt, dimmer, r, g, b, strobe...
     }
 
     [Serializable]
@@ -33,16 +32,19 @@ namespace Laps.Core
         public int ledCount;
         public string controllerIp;
         public int universe;
-        public int startChannel;    // Canal DMX de départ dans l'univers
-        public int channelsPerLed;  // 3 = RGB, 4 = RGBW
+        public int startChannel;
+        public int channelsPerLed;
     }
 
     [Serializable]
     public class NetworkConfig
     {
         public ControllerConfig[] controllers;
-        public int eHubPort;        // Port UDP pour les messages eHub (P7)
-        public int artNetPort;      // Port ArtNet standard = 6454
+        public bool eHubEnabled;      // Active la sync multi-postes
+        public int eHubPort;          // Port UDP eHub (défaut 9000)
+        public string eHubSessionId;  // Code équipe — isole du reste de la classe
+        public string[] eHubPeers;    // IPs des autres postes de VOTRE équipe (unicast)
+        public int artNetPort;        // Port ArtNet standard = 6454
     }
 
     [Serializable]
@@ -66,38 +68,33 @@ namespace Laps.Core
         public MappingConfig mapping;
     }
 
-    // ────────────────────────────────────────────────
-    //  ConfigManager — chargement dynamique (P1)
-    // ────────────────────────────────────────────────
-
     /// <summary>
     /// Charge et sauvegarde la configuration depuis StreamingAssets/config.json.
-    /// Satisfait l'exigence P1 : configuration dynamique de l'installation physique.
+    /// Recharge le mapping entités depuis CSV (section router.files).
     /// </summary>
     public class ConfigManager : MonoBehaviour
     {
         public static ConfigManager Instance { get; private set; }
-        public static AppConfig Config { get; private set; }
+        public static ExtendedAppConfig Config { get; private set; }
 
-        /// <summary>Événement déclenché après chaque rechargement de la config.</summary>
+        /// <summary>Mapping entité → (contrôleur, univers, canal) chargé depuis CSV.</summary>
+        public static EntityMapping EntityMap { get; private set; } = new EntityMapping();
+
+        /// <summary>Chemin absolu du CSV de mapping (null si non configuré).</summary>
+        public static string EntityMappingCsvPath { get; private set; }
+
         public static event Action OnConfigReloaded;
 
         private string ConfigPath => Path.Combine(Application.streamingAssetsPath, "config.json");
 
         private void Awake()
         {
-            // Singleton
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
-
             LoadConfig();
         }
 
-        /// <summary>
-        /// Charge la configuration depuis le fichier JSON.
-        /// Peut être appelé à nouveau pour recharger à chaud.
-        /// </summary>
         public void LoadConfig()
         {
             if (!File.Exists(ConfigPath))
@@ -110,9 +107,12 @@ namespace Laps.Core
             try
             {
                 string json = File.ReadAllText(ConfigPath);
-                Config = JsonUtility.FromJson<AppConfig>(json);
+                Config = JsonUtility.FromJson<ExtendedAppConfig>(json);
+                LoadEntityMapping();
+
                 Debug.Log($"[ConfigManager] Config chargée — {Config.network.controllers.Length} contrôleurs, " +
-                          $"{Config.mapping.ledCount} LEDs ({Config.mapping.screenWidth}×{Config.mapping.screenHeight})");
+                          $"{Config.mapping.ledCount} LEDs ({Config.mapping.screenWidth}×{Config.mapping.screenHeight}), " +
+                          $"mapping CSV: {EntityMappingCsvPath ?? "aucun"} ({EntityMap.Count} entités)");
                 OnConfigReloaded?.Invoke();
             }
             catch (Exception e)
@@ -121,11 +121,10 @@ namespace Laps.Core
             }
         }
 
-        /// <summary>
-        /// Sauvegarde la configuration courante dans le fichier JSON.
-        /// </summary>
         public void SaveConfig()
         {
+            if (Config == null) return;
+
             try
             {
                 string json = JsonUtility.ToJson(Config, prettyPrint: true);
@@ -139,38 +138,89 @@ namespace Laps.Core
         }
 
         /// <summary>
-        /// Crée une configuration par défaut si le fichier est absent.
+        /// Modifie l'IP d'un contrôleur, sauvegarde et notifie le routeur (P1).
         /// </summary>
+        public void SetControllerIp(int controllerIndex, string ip)
+        {
+            if (Config?.network?.controllers == null ||
+                controllerIndex < 0 ||
+                controllerIndex >= Config.network.controllers.Length)
+            {
+                Debug.LogWarning($"[ConfigManager] Index contrôleur invalide : {controllerIndex}");
+                return;
+            }
+
+            Config.network.controllers[controllerIndex].ip = ip;
+            SaveConfig();
+            Debug.Log($"[ConfigManager] IP contrôleur {controllerIndex} → {ip}");
+            OnConfigReloaded?.Invoke();
+        }
+
+        private void LoadEntityMapping()
+        {
+            EntityMappingCsvPath = null;
+            EntityMap.Clear();
+
+            string relativePath = Config?.router?.files?.entityMappingCsv;
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                Debug.LogWarning("[ConfigManager] Aucun router.files.entityMappingCsv défini dans config.json");
+                return;
+            }
+
+            EntityMappingCsvPath = Path.Combine(Application.streamingAssetsPath, relativePath);
+
+            if (!File.Exists(EntityMappingCsvPath))
+            {
+                Debug.LogError($"[ConfigManager] Fichier mapping introuvable : {EntityMappingCsvPath}");
+                return;
+            }
+
+            EntityMap.LoadFromCsv(EntityMappingCsvPath);
+        }
+
         private void CreateDefaultConfig()
         {
-            Config = new AppConfig
+            Config = new ExtendedAppConfig
             {
                 network = new NetworkConfig
                 {
                     controllers = new[]
                     {
-                        // Un seul contrôleur couvre tous les univers 0-385
-                        // (65 536 LEDs ÷ 170 LEDs/univers = 386 univers)
-                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 1, universeCount = 386 }
+                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.46", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.47", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.48", startUniverse = 0, universeCount = 32 }
                     },
+                    eHubEnabled = true,
                     eHubPort = 9000,
+                    eHubSessionId = "mon-equipe",
+                    eHubPeers = new string[0],
                     artNetPort = 6454
                 },
                 mapping = new MappingConfig
                 {
-                    layout        = "Matrix2D",
-                    ledCount      = 65536,       // 256 × 256
-                    screenWidth   = 256,
-                    screenHeight  = 256,
-                    pixelOrder    = "RGB",
+                    layout         = "LapsWall128",
+                    ledCount       = 16384,
+                    screenWidth    = 128,
+                    screenHeight   = 128,
+                    pixelOrder     = "RGB",
                     channelsPerLed = 3,
-                    serpentine    = true,         // Matrice câblée en zigzag
-                    strips        = new StripConfig[0],
-                    lyres         = new LyreConfig[0]
+                    serpentine     = false,
+                    strips         = new StripConfig[0],
+                    lyres          = new LyreConfig[0]
+                },
+                router = new RouterConfig
+                {
+                    files = new RouterFilesConfig
+                    {
+                        entityMappingCsv = "mapping/led_wall_mapping.csv"
+                    }
                 }
             };
 
             SaveConfig();
+            LoadEntityMapping();
             Debug.Log("[ConfigManager] Configuration par défaut créée.");
             OnConfigReloaded?.Invoke();
         }
