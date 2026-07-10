@@ -53,6 +53,23 @@ namespace Laps.Routing
         public float  RoutingFps { get; private set; }
         public float  RoutingMs  { get; private set; }
 
+        /// <summary>État LED final (animation + feux d'artifice) tel qu'envoyé en Art-Net.</summary>
+        public bool TryGetDisplaySnapshot(out Color32[] snapshot)
+        {
+            lock (_lock)
+            {
+                if (_readBuffer == null || _readBuffer.Length == 0)
+                {
+                    snapshot = null;
+                    return false;
+                }
+
+                snapshot = new Color32[_readBuffer.Length];
+                Array.Copy(_readBuffer, snapshot, _readBuffer.Length);
+                return true;
+            }
+        }
+
         // ── Unity Lifecycle ────────────────────────────────────
 
         private void Awake()
@@ -119,6 +136,8 @@ namespace Laps.Routing
         {
             if (_stateProvider == null) return;
 
+            LedFireworks.Tick(Time.deltaTime);
+
             Color32[] state = _stateProvider.GetState();
             LyreState[] lyres = _stateProvider.GetLyreStates();
             IReadOnlyList<EntityColor> entities = null;
@@ -133,6 +152,15 @@ namespace Laps.Routing
                         _writeBuffer = new Color32[state.Length];
 
                     Array.Copy(state, _writeBuffer, state.Length);
+
+                    var map = ConfigManager.Config?.mapping;
+                    if (map != null)
+                    {
+                        LedFireworks.CompositeOnto(
+                            _writeBuffer,
+                            map.screenWidth > 0 ? map.screenWidth : 128,
+                            map.screenHeight > 0 ? map.screenHeight : 128);
+                    }
 
                     Color32[] tmp = _readBuffer;
                     _readBuffer = _writeBuffer;
