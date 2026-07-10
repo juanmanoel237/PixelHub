@@ -29,7 +29,15 @@ namespace Laps.Authoring
         public void SetProvider(IStateProvider provider, string modeLabel)
         {
             _provider = provider;
-            _modeLabel = modeLabel;
+            _modeLabel = modeLabel ?? "—";
+            _refreshTimer = 0f;
+            ForceRefresh();
+        }
+
+        /// <summary>Rafraîchit tout de suite l'aperçu (sync eHub / changement de mode).</summary>
+        public void ForceRefresh()
+        {
+            RefreshPreview();
         }
 
         private void Awake()
@@ -56,6 +64,7 @@ namespace Laps.Authoring
 
         private void Update()
         {
+            // unscaledDeltaTime : l'aperçu continue même en pause (sync eHub)
             _refreshTimer += Time.unscaledDeltaTime;
             if (_refreshTimer < 0.05f) return;
             _refreshTimer = 0f;
@@ -153,6 +162,19 @@ namespace Laps.Authoring
                 y += 18;
             }
 
+            if (EHubStatus.Enabled)
+            {
+                if (EHubStatus.Connected)
+                {
+                    string role = EHubStatus.Role == EHubRole.Host ? "Hôte" : $"Client → {EHubStatus.HostIp}";
+                    GUI.Label(new Rect(margin + 8, y, 244, 18),
+                        $"eHub {role} — {EHubStatus.TotalPostes} poste(s)");
+                }
+                else
+                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — connectez-vous (panneau bas)");
+                y += 18;
+            }
+
             if (ConfigManager.Config?.network.controllers?.Length > 0)
             {
                 var c = ConfigManager.Config.network.controllers[0];
@@ -167,7 +189,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 28, Screen.width - margin * 2, 22),
-                "Onglet GAME (pas Scene). Touches : 1 / R / G / B / 0 / T / A (audio)");
+                "Panneau eHub en bas : Hôte OU saisir IP + Connecter.");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)

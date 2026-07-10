@@ -22,7 +22,10 @@
         "universeCount": 32
       }
     ],
+    "eHubEnabled": true,
     "eHubPort": 9000,
+    "eHubSessionId": "equipe-pixelhub",
+    "eHubPeers": [],
     "artNetPort": 6454
   },
   "mapping": {
