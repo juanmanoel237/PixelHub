@@ -82,6 +82,8 @@ public class PixelHubBootstrapper : MonoBehaviour
                 break;
                 
             case StartMode.VideoCapture:
+                _showTimeline.LoadShow();
+                _showTimeline.Play();
                 SwitchToVideoCapture();
                 break;
         }
