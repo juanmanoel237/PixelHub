@@ -56,7 +56,7 @@ namespace Laps.Authoring
 
         private void Update()
         {
-            _refreshTimer += Time.deltaTime;
+            _refreshTimer += Time.unscaledDeltaTime;
             if (_refreshTimer < 0.05f) return;
             _refreshTimer = 0f;
             RefreshPreview();
@@ -64,13 +64,30 @@ namespace Laps.Authoring
 
         private void RefreshPreview()
         {
-            if (_provider == null || _previewTexture == null) return;
-            Color32[] state = _provider.GetState();
+            if (_previewTexture == null) return;
+
+            Color32[] state = null;
+            if (_routingEngine != null && _routingEngine.TryGetDisplaySnapshot(out Color32[] routed))
+                state = routed;
+
+            if (state == null)
+            {
+                if (_provider == null) return;
+                state = _provider.GetState();
+                if (state == null || state.Length == 0) return;
+
+                int len = Mathf.Min(state.Length, _screenWidth * _screenHeight);
+                var copy = new Color32[len];
+                System.Array.Copy(state, copy, len);
+                LedFireworks.CompositeOnto(copy, _screenWidth, _screenHeight);
+                state = copy;
+            }
+
             if (state == null || state.Length == 0) return;
 
-            int len = Mathf.Min(state.Length, _screenWidth * _screenHeight);
-            var pixels = new Color[len];
-            for (int i = 0; i < len; i++)
+            int pixelCount = Mathf.Min(state.Length, _screenWidth * _screenHeight);
+            var pixels = new Color[pixelCount];
+            for (int i = 0; i < pixelCount; i++)
                 pixels[i] = state[i];
 
             _previewTexture.SetPixels(pixels);
