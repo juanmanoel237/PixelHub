@@ -8,17 +8,17 @@
       },
       {
         "ip": "192.168.1.46",
-        "startUniverse": 32,
+        "startUniverse": 0,
         "universeCount": 32
       },
       {
         "ip": "192.168.1.47",
-        "startUniverse": 64,
+        "startUniverse": 0,
         "universeCount": 32
       },
       {
         "ip": "192.168.1.48",
-        "startUniverse": 96,
+        "startUniverse": 0,
         "universeCount": 32
       }
     ],
@@ -26,12 +26,13 @@
     "artNetPort": 6454
   },
   "mapping": {
+    "layout": "LapsWall128",
     "ledCount": 16384,
     "screenWidth": 128,
     "screenHeight": 128,
     "pixelOrder": "RGB",
     "channelsPerLed": 3,
-    "serpentine": true,
+    "serpentine": false,
     "strips": [],
     "lyres": []
   },

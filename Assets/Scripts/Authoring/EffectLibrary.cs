@@ -316,40 +316,139 @@ namespace Laps.Authoring
         /// </summary>
         private static void FxTextDisplay(int w, int h, EffectParameters p, Color32[] output)
         {
-            // Fond noir
             FxBlackOut(output);
+            RenderTextCentered(w, h, p.text ?? "HELLO", Mathf.Max(1, p.textScale),
+                ApplyIntensity(p.colorA, p.intensity), output);
+        }
 
-            string text = (p.text ?? "HELLO").ToLowerInvariant();
-            int scale   = Mathf.Max(1, p.textScale);
-            Color32 fg  = ApplyIntensity(p.colorA, p.intensity);
+        /// <summary>
+        /// Rend du texte centré (une ligne). <paramref name="visibleChars"/> limite le nombre de lettres affichées.
+        /// <paramref name="lastCharReveal01"/> anime la dernière lettre (0 = invisible, 1 = complète).
+        /// </summary>
+        public static void RenderTextCentered(
+            int w, int h, string text, int scale, Color32 fg, Color32[] output,
+            int visibleChars = int.MaxValue, float lastCharReveal01 = 1f)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            text = text.ToLowerInvariant();
+            scale = Mathf.Max(1, scale);
 
             int glyphW = FONT_W * scale;
             int glyphH = FONT_H * scale;
-            int gap    = CHAR_GAP * scale;
-
+            int gap = CHAR_GAP * scale;
             int totalW = text.Length * (glyphW + gap) - gap;
-
-            // Centrage horizontal et vertical
             int originX = Mathf.Max(0, (w - totalW) / 2);
             int originY = Mathf.Max(0, (h - glyphH) / 2);
 
+            RenderTextLine(w, h, text, scale, fg, output, originX, originY, visibleChars, lastCharReveal01);
+        }
+
+        /// <summary>Une seule lettre géante au centre (intro présidentielle).</summary>
+        public static void RenderSingleCharCentered(
+            int w, int h, char ch, int scale, Color32 fg, Color32[] output,
+            float reveal01 = 1f)
+        {
+            scale = Mathf.Max(1, scale);
+            ch = char.ToLowerInvariant(ch);
+            if (!Font5x7.TryGetValue(ch, out byte[] glyph))
+                glyph = Font5x7[' '];
+
+            int glyphW = FONT_W * scale;
+            int glyphH = FONT_H * scale;
+            int originX = Mathf.Max(0, (w - glyphW) / 2);
+            int originY = Mathf.Max(0, (h - glyphH) / 2);
+            reveal01 = Mathf.Clamp01(reveal01);
+            int maxRow = Mathf.CeilToInt(FONT_H * reveal01) - 1;
+            maxRow = Mathf.Clamp(maxRow, 0, FONT_H - 1);
+
+            for (int row = 0; row <= maxRow; row++)
+            {
+                byte bits = glyph[row];
+                for (int col = 0; col < FONT_W; col++)
+                {
+                    if ((bits & (1 << (FONT_W - 1 - col))) == 0) continue;
+                    for (int sy = 0; sy < scale; sy++)
+                    {
+                        int py = originY + row * scale + sy;
+                        if (py < 0 || py >= h) continue;
+                        for (int sx = 0; sx < scale; sx++)
+                        {
+                            int px = originX + col * scale + sx;
+                            if (px < 0 || px >= w) continue;
+                            output[py * w + px] = fg;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Deux lignes centrées (ex: "bienvenue" / "au continent").</summary>
+        public static void RenderTextTwoLines(
+            int w, int h, string line1, string line2, int scale, Color32 fg, Color32[] output,
+            int visibleChars = int.MaxValue, float lastCharReveal01 = 1f)
+        {
+            line1 = (line1 ?? "").ToLowerInvariant();
+            line2 = (line2 ?? "").ToLowerInvariant();
+            scale = Mathf.Max(1, scale);
+
+            int glyphW = FONT_W * scale;
+            int glyphH = FONT_H * scale;
+            int gap = CHAR_GAP * scale;
+            int lineGap = scale * 2;
+
+            int w1 = line1.Length > 0 ? line1.Length * (glyphW + gap) - gap : 0;
+            int w2 = line2.Length > 0 ? line2.Length * (glyphW + gap) - gap : 0;
+            int totalH = glyphH * 2 + lineGap;
+
+            int y1 = Mathf.Max(0, (h - totalH) / 2);
+            int y2 = y1 + glyphH + lineGap;
+            int x1 = Mathf.Max(0, (w - w1) / 2);
+            int x2 = Mathf.Max(0, (w - w2) / 2);
+
+            int len1 = line1.Length;
+            if (visibleChars <= len1)
+            {
+                RenderTextLine(w, h, line1, scale, fg, output, x1, y1, visibleChars, lastCharReveal01);
+                return;
+            }
+
+            RenderTextLine(w, h, line1, scale, fg, output, x1, y1, len1, 1f);
+            int rem = visibleChars - len1;
+            RenderTextLine(w, h, line2, scale, fg, output, x2, y2, rem, lastCharReveal01);
+        }
+
+        private static void RenderTextLine(
+            int w, int h, string text, int scale, Color32 fg, Color32[] output,
+            int originX, int originY, int visibleChars, float lastCharReveal01)
+        {
+            int glyphW = FONT_W * scale;
+            int glyphH = FONT_H * scale;
+            int gap = CHAR_GAP * scale;
+            visibleChars = Mathf.Clamp(visibleChars, 0, text.Length);
+            lastCharReveal01 = Mathf.Clamp01(lastCharReveal01);
+
             for (int ci = 0; ci < text.Length; ci++)
             {
+                if (ci > visibleChars) break;
+
                 char ch = text[ci];
                 if (!Font5x7.TryGetValue(ch, out byte[] glyph))
                     glyph = Font5x7[' '];
 
                 int ox = originX + ci * (glyphW + gap);
+                float reveal = (ci < visibleChars) ? 1f : lastCharReveal01;
+                if (reveal <= 0.001f) continue;
 
-                for (int row = 0; row < FONT_H; row++)
+                int maxRow = Mathf.CeilToInt(FONT_H * reveal) - 1;
+                maxRow = Mathf.Clamp(maxRow, 0, FONT_H - 1);
+
+                for (int row = 0; row <= maxRow; row++)
                 {
                     byte bits = glyph[row];
                     for (int col = 0; col < FONT_W; col++)
                     {
-                        // Bit actif ?
                         if ((bits & (1 << (FONT_W - 1 - col))) == 0) continue;
 
-                        // Dessiner un bloc scale×scale
                         for (int sy = 0; sy < scale; sy++)
                         {
                             int py = originY + row * scale + sy;
@@ -359,7 +458,6 @@ namespace Laps.Authoring
                             {
                                 int px = ox + col * scale + sx;
                                 if (px < 0 || px >= w) continue;
-
                                 output[py * w + px] = fg;
                             }
                         }

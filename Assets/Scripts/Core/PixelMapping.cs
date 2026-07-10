@@ -10,7 +10,7 @@ namespace Laps.Core
     public struct LEDAddress
     {
         public int controllerIndex; // Index dans ConfigManager.Config.network.controllers
-        public int universe;        // Univers DMX absolu (0-127)
+        public int universe;        // Univers local ArtNet (0-31 par contrôleur)
         public int channel;         // Canal dans l'univers (0-511), multiple de channelsPerLed
     }
 
@@ -30,7 +30,7 @@ namespace Laps.Core
         // Largeur de l'écran (nécessaire pour le calcul serpentin)
         public int ScreenWidth { get; private set; }
 
-        // Mapping serpéntin actif ?
+        // Mapping serpéntin actif ?
         public bool IsSerpentine { get; private set; }
 
         // Mapping inversé : controllerIndex → liste des univers qu'il gère
@@ -57,70 +57,116 @@ namespace Laps.Core
             PixelMap      = new LEDAddress[LedCount];
             ControllerUniverses = new Dictionary<int, List<int>>();
 
+            bool isLapsWall128 = !string.IsNullOrEmpty(mapping.layout) &&
+                                 mapping.layout.Trim().ToLowerInvariant() == "lapswall128";
+
             // Nombre de LEDs par univers DMX
             // Un univers = 512 canaux. Ex: RGB → 170 LEDs/univers ; RGBW → 128 LEDs/univers
             int ledsPerUniverse = 512 / ChannelsPerLed;
 
             for (int ledIndex = 0; ledIndex < LedCount; ledIndex++)
             {
-                // ── Calcul de l'adresse physique (avec serpentin si actif) ──
-                int physicalIndex;
-                if (IsSerpentine)
+                int ctrlIndex;
+                int universe;
+                int channel;
+
+                if (isLapsWall128)
                 {
-                    int y = ledIndex / ScreenWidth;
-                    int x = ledIndex % ScreenWidth;
-                    // Lignes impaires : câblage de droite à gauche
-                    int physX = (y % 2 == 1) ? (ScreenWidth - 1 - x) : x;
-                    physicalIndex = y * ScreenWidth + physX;
+                    // Mur LAPS : 128×128 visibles.
+                    // 64 bandes (strips) de 259 LEDs : 1 invisible (bas), 128 visibles vers le haut,
+                    // 1 invisible (haut), 128 visibles vers le bas, 1 invisible (bas).
+                    // Chaque bande couvre 2 colonnes (montée/descente), donc 64 bandes → 128 colonnes.
+                    //
+                    // Univers Art-Net : 0..31 par contrôleur (32 univers), 2 univers par bande (car 259 > 170).
+                    // Contrôleurs : 4 quarts de 32 colonnes → 16 bandes → 32 univers, IPs 45..48.
+
+                    int x = ledIndex % 128;
+                    int y = ledIndex / 128;
+
+                    ctrlIndex = x / 32;               // 0..3 (4 contrôleurs)
+                    int xInQuarter = x % 32;          // 0..31
+                    int stripInQuarter = xInQuarter / 2; // 0..15 (16 bandes par quart)
+                    int side = xInQuarter % 2;        // 0 = colonne "montée", 1 = colonne "descente"
+
+                    // Index LED dans la bande (0..258), en comptant les LEDs invisibles.
+                    int stripLedIndex;
+                    if (side == 0)
+                    {
+                        // Montée : visibles (y=0 en haut → LED 128, y=127 en bas → LED 1)
+                        stripLedIndex = 1 + (127 - y);
+                    }
+                    else
+                    {
+                        // Descente : visibles (y=0 en haut → LED 130, y=127 en bas → LED 257)
+                        stripLedIndex = 130 + y;
+                    }
+
+                    int universeInStrip = stripLedIndex >= 170 ? 1 : 0; // 0 ou 1
+                    universe = stripInQuarter * 2 + universeInStrip;    // 0..31 (par contrôleur)
+
+                    int ledIndexInUniverse = stripLedIndex % 170;        // 0..169
+                    channel = ledIndexInUniverse * ChannelsPerLed;       // 0..509
                 }
                 else
                 {
-                    physicalIndex = ledIndex;
-                }
+                    // ── Mapping "Matrix2D" (avec serpentin si actif) ──
+                    int physicalIndex;
+                    if (IsSerpentine)
+                    {
+                        int y = ledIndex / ScreenWidth;
+                        int x = ledIndex % ScreenWidth;
+                        // Lignes impaires : câblage de droite à gauche
+                        int physX = (y % 2 == 1) ? (ScreenWidth - 1 - x) : x;
+                        physicalIndex = y * ScreenWidth + physX;
+                    }
+                    else
+                    {
+                        physicalIndex = ledIndex;
+                    }
 
-                int universeSlot = physicalIndex / ledsPerUniverse; // 0, 1, 2… dans l'installation
-                int channel      = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
+                    int universeSlot = physicalIndex / ledsPerUniverse;
+                    channel = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
 
-                // Univers absolu interne = startUniverse + slot local sur CE contrôleur
-                int ctrlIndex = -1;
-                int absoluteUniverse = -1;
-                if (TryResolveUniverseSlot(network.controllers, universeSlot, out ctrlIndex, out absoluteUniverse))
-                {
-                    // resolved
+                    ctrlIndex = -1;
+                    universe = -1;
+                    if (TryResolveUniverseSlot(network.controllers, universeSlot, out ctrlIndex, out int absoluteUniverse))
+                    {
+                        // Convertir univers absolu interne → univers local ArtNet par contrôleur
+                        universe = absoluteUniverse - network.controllers[ctrlIndex].startUniverse;
+                    }
                 }
 
                 PixelMap[ledIndex] = new LEDAddress
                 {
                     controllerIndex = ctrlIndex,
-                    universe = absoluteUniverse,
+                    universe = universe,
                     channel = channel
                 };
 
                 // Enregistrer dans le mapping inversé
-                if (ctrlIndex >= 0 && absoluteUniverse >= 0)
+                if (ctrlIndex >= 0 && universe >= 0)
                 {
                     if (!ControllerUniverses.ContainsKey(ctrlIndex))
                         ControllerUniverses[ctrlIndex] = new List<int>();
 
-                    if (!ControllerUniverses[ctrlIndex].Contains(absoluteUniverse))
-                        ControllerUniverses[ctrlIndex].Add(absoluteUniverse);
+                    if (!ControllerUniverses[ctrlIndex].Contains(universe))
+                        ControllerUniverses[ctrlIndex].Add(universe);
                 }
             }
 
             if (LedCount > 0 && PixelMap[0].controllerIndex >= 0)
             {
-                Debug.Log($"[PixelMapping] 1ère LED → univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1} " +
-                          $"(startUniverse={network.controllers[0].startUniverse})");
+                Debug.Log($"[PixelMapping] 1ère LED → contrôleur {PixelMap[0].controllerIndex}, " +
+                          $"univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1}");
             }
 
             Debug.Log($"[PixelMapping] Mapping construit : {LedCount} LEDs, " +
                       $"{ledsPerUniverse} LEDs/univers, {ChannelsPerLed} canaux/LED, " +
-                      $"serpentin={IsSerpentine}");
+                      $"serpentin={IsSerpentine}, layout={mapping.layout ?? "Matrix2D"}");
         }
 
         /// <summary>
         /// Résout un slot d'univers global vers (contrôleur, univers absolu interne).
-        /// Ex: slot 32 → contrôleur 1, univers absolu 32 (local 0 sur .46).
         /// </summary>
         private static bool TryResolveUniverseSlot(
             ControllerConfig[] controllers,

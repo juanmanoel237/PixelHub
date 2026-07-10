@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Playables;
 using Laps.Core;
 using Laps.Routing;
 using Laps.Authoring;
@@ -22,6 +23,8 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
     [SerializeField] private EHubReceiver   _eHubReceiver;
+    [SerializeField] private AudioReactiveProvider _audioReactive;
+    [SerializeField] private VideoCaptureProvider _videoCapture;
 
     private LedPreviewOverlay _previewOverlay;
 
@@ -32,31 +35,28 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     public enum StartMode
     {
-        Timeline,    // Authoring classique via ShowTimeline
-        Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
-        EHub,        // Réception eHuB UDP (P7 bonus)
-        Manual       // L'utilisateur choisit via l'UI
+        Timeline,     // Authoring classique via ShowTimeline
+        Debug,        // Fake state via DebugPanel (pour tester les contrôleurs)
+        EHub,         // Réception eHuB UDP (P7 bonus)
+        Manual,       // L'utilisateur choisit via l'UI
+        VideoCapture  // Démarre directement sur la caméra
     }
 
     private void Awake()
     {
-        // Auto-câblage si la scène n'a que ConfigManager (cas actuel du projet)
         EnsureComponents();
     }
 
     private void Start()
     {
-        // La config est chargée par ConfigManager.Awake() — on attend juste qu'elle soit prête
         if (ConfigManager.Config == null)
         {
             Debug.LogError("[PixelHubBootstrapper] ConfigManager non trouvé ou config non chargée !");
             return;
         }
 
-        // Connecter le DebugPanel au RoutingEngine
         _debugPanel?.SetRoutingEngine(_routingEngine);
 
-        // Choisir le state provider selon le mode
         switch (_startMode)
         {
             case StartMode.Timeline:
@@ -84,18 +84,20 @@ public class PixelHubBootstrapper : MonoBehaviour
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
+
+            case StartMode.VideoCapture:
+                SwitchToVideoCapture();
+                break;
         }
 
-        // Démarrer le thread de routage
         _routingEngine.StartRouting();
 
-        // Prévisualisation à l'écran (onglet Game)
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
     }
 
     private void Update()
@@ -106,6 +108,10 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToDebug();
         else if (Input.GetKeyDown(KeyCode.E))
             SwitchToEHub();
+        else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
+            SwitchToAudioReactive();
+        else if (Input.GetKeyDown(KeyCode.V))
+            SwitchToVideoCapture();
         else if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchToDebug();
@@ -146,9 +152,11 @@ public class PixelHubBootstrapper : MonoBehaviour
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
         if (_eHubReceiver == null)
             _eHubReceiver = GetComponent<EHubReceiver>() ?? gameObject.AddComponent<EHubReceiver>();
+        if (_audioReactive == null)
+            _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
+        if (_videoCapture == null)
+            _videoCapture = FindObjectOfType<VideoCaptureProvider>();
     }
-
-    // ── API pour l'UI ─────────────────────────────────────────
 
     public void SwitchToTimeline()
     {
@@ -183,11 +191,47 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] Mode eHuB actif.");
     }
 
+    public void SwitchToAudioReactive()
+    {
+        _routingEngine.StopRoutingThread();
+
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            var src = director.GetComponent<AudioSource>();
+            if (src != null)
+                _audioReactive.SetAudioSource(src);
+            if (director.state != PlayState.Playing)
+                director.Play();
+        }
+
+        _audioReactive?.ResetIntro();
+
+        _routingEngine.SetStateProvider(_audioReactive);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Manual;
+        _previewOverlay?.SetProvider(_audioReactive, "Audio-reactif — pump/kick");
+        Debug.Log("[PixelHubBootstrapper] Mode Audio-réactif actif (basses/kicks).");
+    }
+
+    public void SwitchToVideoCapture()
+    {
+        if (_videoCapture == null) _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_videoCapture == null) return;
+
+        _routingEngine.StopRoutingThread();
+        _routingEngine.SetStateProvider(_videoCapture);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Manual;
+        _previewOverlay?.SetProvider(_videoCapture, "Video Capture (Feux d'artifice)");
+        Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
+    }
+
     private void UpdatePreviewProvider()
     {
         if (_previewOverlay == null) return;
         if (_currentMode == StartMode.Timeline)
-            _previewOverlay.SetProvider(_showTimeline, "Timeline — le continent");
+            _previewOverlay.SetProvider(_showTimeline, "Timeline");
         else if (_currentMode == StartMode.Debug)
             _previewOverlay.SetProvider(_debugPanel, "Debug");
         else if (_currentMode == StartMode.EHub)

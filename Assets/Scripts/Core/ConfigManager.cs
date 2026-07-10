@@ -47,12 +47,13 @@ namespace Laps.Core
     [Serializable]
     public class MappingConfig
     {
-        public int ledCount;
-        public int screenWidth;
-        public int screenHeight;
-        public string pixelOrder;
-        public int channelsPerLed;
-        public bool serpentine;
+        public string layout;       // "Matrix2D" (défaut) ou "LapsWall128"
+        public int ledCount;        // Nombre total de LEDs sur l'écran principal
+        public int screenWidth;     // Largeur de l'écran en pixels
+        public int screenHeight;    // Hauteur de l'écran en pixels
+        public string pixelOrder;   // "RGB" ou "RGBW" ou "GRB" etc.
+        public int channelsPerLed;  // 3 ou 4
+        public bool serpentine;     // true = lignes impaires câblées de droite à gauche
         public StripConfig[] strips;
         public LyreConfig[] lyres;
     }
@@ -183,19 +184,23 @@ namespace Laps.Core
                 {
                     controllers = new[]
                     {
-                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 1, universeCount = 386 }
+                        new ControllerConfig { ip = "192.168.1.45", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.46", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.47", startUniverse = 0, universeCount = 32 },
+                        new ControllerConfig { ip = "192.168.1.48", startUniverse = 0, universeCount = 32 }
                     },
                     eHubPort = 9000,
                     artNetPort = 6454
                 },
                 mapping = new MappingConfig
                 {
-                    ledCount       = 65536,
-                    screenWidth    = 256,
-                    screenHeight   = 256,
+                    layout         = "LapsWall128",
+                    ledCount       = 16384,
+                    screenWidth    = 128,
+                    screenHeight   = 128,
                     pixelOrder     = "RGB",
                     channelsPerLed = 3,
-                    serpentine     = true,
+                    serpentine     = false,
                     strips         = new StripConfig[0],
                     lyres          = new LyreConfig[0]
                 },
