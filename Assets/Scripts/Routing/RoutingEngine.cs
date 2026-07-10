@@ -33,15 +33,18 @@ namespace Laps.Routing
         // Thread de routage dédié
         private Thread  _routingThread;
         private bool    _running;
-        private bool    _dirty; // Demande de mise à jour depuis le main thread
 
-        // Buffers DMX par univers — évite les allocations en boucle
+        // Buffers DMX par (contrôleur, univers) — évite les allocations en boucle
         // Key = (controllerIndex<<16) | (universe&0xFFFF), Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
+        private readonly List<int> _universesToSend = new List<int>(256);
 
-        // Snapshot protégé par lock (copie des couleurs depuis le main thread)
-        private Color32[] _snapshot;
+        // Double buffer : le main thread écrit dans _writeBuffer, le thread routage lit _readBuffer
+        private Color32[] _readBuffer;
+        private Color32[] _writeBuffer;
+        private Color32[] _routingCopy;
         private LyreState[] _lyreSnapshot;
+        private IReadOnlyList<EntityColor> _entitySnapshot;
         private readonly object _lock = new object();
 
         // ── Statistiques (P8) ──────────────────────────────────
@@ -116,19 +119,28 @@ namespace Laps.Routing
         {
             if (_stateProvider == null) return;
 
-            // Copier l'état courant dans le snapshot (opération rapide, protégée par lock)
             Color32[] state = _stateProvider.GetState();
             LyreState[] lyres = _stateProvider.GetLyreStates();
+            IReadOnlyList<EntityColor> entities = null;
+            if (_stateProvider is IEntityStateProvider entityProvider)
+                entities = entityProvider.GetEntityState();
 
             lock (_lock)
             {
-                // Resize du snapshot si nécessaire (ex: rechargement de config)
-                if (_snapshot == null || _snapshot.Length != state.Length)
-                    _snapshot = new Color32[state.Length];
+                if (state != null)
+                {
+                    if (_writeBuffer == null || _writeBuffer.Length != state.Length)
+                        _writeBuffer = new Color32[state.Length];
 
-                Array.Copy(state, _snapshot, state.Length);
+                    Array.Copy(state, _writeBuffer, state.Length);
+
+                    Color32[] tmp = _readBuffer;
+                    _readBuffer = _writeBuffer;
+                    _writeBuffer = tmp;
+                }
+
                 _lyreSnapshot = lyres;
-                _dirty = true;
+                _entitySnapshot = entities;
             }
         }
 
@@ -143,30 +155,39 @@ namespace Laps.Routing
             {
                 sw.Restart();
 
-                bool hasWork;
                 Color32[] snapshot;
                 LyreState[] lyres;
+                IReadOnlyList<EntityColor> entities;
 
                 lock (_lock)
                 {
-                    hasWork  = _dirty;
-                    snapshot = _snapshot;
-                    lyres    = _lyreSnapshot;
-                    _dirty   = false;
+                    entities = _entitySnapshot;
+                    lyres = _lyreSnapshot;
+
+                    if (_readBuffer == null)
+                    {
+                        snapshot = null;
+                    }
+                    else
+                    {
+                        if (_routingCopy == null || _routingCopy.Length != _readBuffer.Length)
+                            _routingCopy = new Color32[_readBuffer.Length];
+                        Array.Copy(_readBuffer, _routingCopy, _readBuffer.Length);
+                        snapshot = _routingCopy;
+                    }
                 }
 
-                if (hasWork && snapshot != null && _pixelMapping != null)
-                {
-                    RouteState(snapshot, lyres);
-                }
+                if (snapshot != null && _pixelMapping != null)
+                    RouteState(snapshot, lyres, entities);
+                else if (entities != null && entities.Count > 0 && ConfigManager.EntityMap?.Count > 0)
+                    RouteState(null, lyres, entities);
 
                 sw.Stop();
                 float elapsed = (float)sw.Elapsed.TotalSeconds;
                 RoutingMs  = elapsed * 1000f;
-                RoutingFps = hasWork ? 1f / Math.Max(elapsed, 0.0001f) : RoutingFps;
+                RoutingFps = 1f / Math.Max(elapsed, 0.0001f);
                 _artNetSender?.UpdateStats(elapsed);
 
-                // Attente précise pour respecter la fréquence cible
                 float remaining = interval - elapsed;
                 if (remaining > 0.001f)
                     Thread.Sleep((int)(remaining * 1000));
@@ -176,39 +197,20 @@ namespace Laps.Routing
         /// <summary>
         /// Convertit le snapshot Color32[] en paquets DMX et les envoie.
         /// </summary>
-        private void RouteState(Color32[] state, LyreState[] lyres)
+        private void RouteState(Color32[] state, LyreState[] lyres, IReadOnlyList<EntityColor> entities)
         {
             var config = ConfigManager.Config;
             if (config == null || _pixelMapping.PixelMap == null) return;
 
-            // ── 1. Effacer tous les buffers DMX ──────────────
             foreach (var buf in _dmxBuffers.Values)
                 Array.Clear(buf, 0, buf.Length);
 
-            // ── 2. Écrire chaque LED dans son buffer ─────────
-            int channels = _pixelMapping.ChannelsPerLed;
-            for (int i = 0; i < state.Length && i < _pixelMapping.LedCount; i++)
-            {
-                ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
-                if (addr.controllerIndex < 0) continue; // LED non mappée
+            // Mode entité (eHuB + CSV) ou mode pixel (authoring/debug)
+            if (entities != null && entities.Count > 0 && ConfigManager.EntityMap != null && ConfigManager.EntityMap.Count > 0)
+                WriteEntitiesToDmx(entities, config);
+            else if (state != null)
+                WritePixelsToDmx(state);
 
-                // Obtenir ou créer le buffer DMX pour (contrôleur, univers)
-                int key = (addr.controllerIndex << 16) | (addr.universe & 0xFFFF);
-                if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
-                {
-                    buf = new byte[512];
-                    _dmxBuffers[key] = buf;
-                }
-
-                Color32 c = state[i];
-                buf[addr.channel]     = c.r;
-                buf[addr.channel + 1] = c.g;
-                buf[addr.channel + 2] = c.b;
-                if (channels == 4)
-                    buf[addr.channel + 3] = 0; // Blanc = 0 par défaut
-            }
-
-            // ── 3. Écrire les lyres dans leurs buffers ───────
             if (lyres != null && config.mapping.lyres != null)
             {
                 foreach (var lyreState in lyres)
@@ -216,13 +218,17 @@ namespace Laps.Routing
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    if (!_dmxBuffers.TryGetValue(lyreCfg.universe, out byte[] buf))
+                    int ctrlIndex = FindControllerIndexByIp(config, lyreCfg.controllerIp);
+                    if (ctrlIndex < 0) continue;
+
+                    int key = DmxBufferKey(ctrlIndex, lyreCfg.universe);
+                    if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                     {
                         buf = new byte[512];
-                        _dmxBuffers[lyreCfg.universe] = buf;
+                        _dmxBuffers[key] = buf;
                     }
 
-                    int ch = lyreCfg.startChannel - 1; // DMX 1-based → 0-based
+                    int ch = lyreCfg.startChannel - 1;
                     buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan,    0, 255);
                     buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt,   0, 255);
                     buf[ch + 2] = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
@@ -234,15 +240,22 @@ namespace Laps.Routing
                 }
             }
 
-            // ── 4. Envoyer les paquets ArtNet (uniquement les univers non vides) ─
+            _artNetSender.BeginFrame();
+
+            _universesToSend.Clear();
             foreach (var kvp in _dmxBuffers)
             {
-                int key = kvp.Key;
-                int controllerIndex = (key >> 16);
-                int universe = key & 0xFFFF;
-                byte[] dmxData = kvp.Value;
+                if (HasNonZeroData(kvp.Value))
+                    _universesToSend.Add(kvp.Key);
+            }
+            _universesToSend.Sort();
 
-                if (!HasNonZeroData(dmxData)) continue;
+            for (int i = 0; i < _universesToSend.Count; i++)
+            {
+                int key = _universesToSend[i];
+                int controllerIndex = key >> 16;
+                int universe = key & 0xFFFF;
+                byte[] dmxData = _dmxBuffers[key];
 
                 if (config.network.controllers == null ||
                     controllerIndex < 0 ||
@@ -256,6 +269,64 @@ namespace Laps.Routing
             }
         }
 
+        private void WritePixelsToDmx(Color32[] state)
+        {
+            int channels = _pixelMapping.ChannelsPerLed;
+
+            for (int i = 0; i < state.Length && i < _pixelMapping.LedCount; i++)
+            {
+                ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
+                if (addr.controllerIndex < 0) continue;
+
+                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
+                {
+                    buf = new byte[512];
+                    _dmxBuffers[key] = buf;
+                }
+
+                Color32 c = state[i];
+                buf[addr.channel]     = c.r;
+                buf[addr.channel + 1] = c.g;
+                buf[addr.channel + 2] = c.b;
+                if (channels == 4)
+                    buf[addr.channel + 3] = 0;
+            }
+        }
+
+        private void WriteEntitiesToDmx(IReadOnlyList<EntityColor> entities, AppConfig config)
+        {
+            if (entities == null || entities.Count == 0) return;
+
+            int channels = config.mapping.channelsPerLed > 0 ? config.mapping.channelsPerLed : 3;
+
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var e = entities[i];
+                if (!ConfigManager.EntityMap.TryGet(e.id, out var addr)) continue;
+                if (addr.controllerIndex < 0) continue;
+
+                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
+                {
+                    buf = new byte[512];
+                    _dmxBuffers[key] = buf;
+                }
+
+                if (addr.channel < 0 || addr.channel + 2 >= 512) continue;
+
+                Color32 c = e.color;
+                buf[addr.channel]     = c.r;
+                buf[addr.channel + 1] = c.g;
+                buf[addr.channel + 2] = c.b;
+                if (channels == 4 && addr.channel + 3 < 512)
+                    buf[addr.channel + 3] = 0;
+            }
+        }
+
+        private static int DmxBufferKey(int controllerIndex, int universe) =>
+            (controllerIndex << 16) | (universe & 0xFFFF);
+
         private static bool HasNonZeroData(byte[] dmxData)
         {
             for (int i = 0; i < dmxData.Length; i++)
@@ -263,7 +334,16 @@ namespace Laps.Routing
             return false;
         }
 
-        // ── Helpers ────────────────────────────────────────────
+        private static int FindControllerIndexByIp(AppConfig config, string ip)
+        {
+            if (config?.network?.controllers == null || string.IsNullOrEmpty(ip)) return -1;
+            for (int i = 0; i < config.network.controllers.Length; i++)
+            {
+                if (config.network.controllers[i].ip == ip)
+                    return i;
+            }
+            return -1;
+        }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)
         {

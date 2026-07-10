@@ -10,7 +10,7 @@ namespace Laps.Core
     public struct LEDAddress
     {
         public int controllerIndex; // Index dans ConfigManager.Config.network.controllers
-        public int universe;        // Univers DMX absolu (0-127)
+        public int universe;        // Univers local ArtNet (0-31 par contrôleur)
         public int channel;         // Canal dans l'univers (0-511), multiple de channelsPerLed
     }
 
@@ -30,7 +30,7 @@ namespace Laps.Core
         // Largeur de l'écran (nécessaire pour le calcul serpentin)
         public int ScreenWidth { get; private set; }
 
-        // Mapping serpéntin actif ?
+        // Mapping serpéntin actif ?
         public bool IsSerpentine { get; private set; }
 
         // Mapping inversé : controllerIndex → liste des univers qu'il gère
@@ -58,7 +58,7 @@ namespace Laps.Core
             ControllerUniverses = new Dictionary<int, List<int>>();
 
             bool isLapsWall128 = !string.IsNullOrEmpty(mapping.layout) &&
-                                 mapping.layout.Trim().ToLowerInvariant() == "lapswall128".ToLowerInvariant();
+                                 mapping.layout.Trim().ToLowerInvariant() == "lapswall128";
 
             // Nombre de LEDs par univers DMX
             // Un univers = 512 canaux. Ex: RGB → 170 LEDs/univers ; RGBW → 128 LEDs/univers
@@ -109,7 +109,7 @@ namespace Laps.Core
                 }
                 else
                 {
-                    // ── Mapping "Matrix2D" actuel (avec serpentin si actif) ──
+                    // ── Mapping "Matrix2D" (avec serpentin si actif) ──
                     int physicalIndex;
                     if (IsSerpentine)
                     {
@@ -124,14 +124,16 @@ namespace Laps.Core
                         physicalIndex = ledIndex;
                     }
 
-                    int universeSlot = physicalIndex / ledsPerUniverse; // 0, 1, 2… dans l'installation
-                    channel      = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
+                    int universeSlot = physicalIndex / ledsPerUniverse;
+                    channel = (physicalIndex % ledsPerUniverse) * ChannelsPerLed;
 
-                    // Univers Art-Net absolu = startUniverse + slot
-                    ctrlIndex = FindControllerForUniverseSlot(network.controllers, universeSlot);
-                    universe = ctrlIndex >= 0
-                        ? network.controllers[ctrlIndex].startUniverse + universeSlot
-                        : -1;
+                    ctrlIndex = -1;
+                    universe = -1;
+                    if (TryResolveUniverseSlot(network.controllers, universeSlot, out ctrlIndex, out int absoluteUniverse))
+                    {
+                        // Convertir univers absolu interne → univers local ArtNet par contrôleur
+                        universe = absoluteUniverse - network.controllers[ctrlIndex].startUniverse;
+                    }
                 }
 
                 PixelMap[ledIndex] = new LEDAddress
@@ -154,29 +156,43 @@ namespace Laps.Core
 
             if (LedCount > 0 && PixelMap[0].controllerIndex >= 0)
             {
-                Debug.Log($"[PixelMapping] 1ère LED → univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1} " +
-                          $"(startUniverse={network.controllers[0].startUniverse})");
+                Debug.Log($"[PixelMapping] 1ère LED → contrôleur {PixelMap[0].controllerIndex}, " +
+                          $"univers {PixelMap[0].universe}, canal DMX {PixelMap[0].channel + 1}");
             }
 
             Debug.Log($"[PixelMapping] Mapping construit : {LedCount} LEDs, " +
                       $"{ledsPerUniverse} LEDs/univers, {ChannelsPerLed} canaux/LED, " +
-                      $"serpentin={IsSerpentine}");
+                      $"serpentin={IsSerpentine}, layout={mapping.layout ?? "Matrix2D"}");
         }
 
         /// <summary>
-        /// Trouve le contrôleur qui gère le N-ième univers de l'installation (slot 0-based).
+        /// Résout un slot d'univers global vers (contrôleur, univers absolu interne).
         /// </summary>
-        private int FindControllerForUniverseSlot(ControllerConfig[] controllers, int universeSlot)
+        private static bool TryResolveUniverseSlot(
+            ControllerConfig[] controllers,
+            int universeSlot,
+            out int controllerIndex,
+            out int absoluteUniverse)
         {
-            if (controllers == null || universeSlot < 0) return -1;
+            controllerIndex = -1;
+            absoluteUniverse = -1;
+
+            if (controllers == null || universeSlot < 0) return false;
+
+            int remaining = universeSlot;
             for (int i = 0; i < controllers.Length; i++)
             {
                 var c = controllers[i];
                 int count = c.universeCount > 0 ? c.universeCount : 32;
-                if (universeSlot < count)
-                    return i;
+                if (remaining < count)
+                {
+                    controllerIndex = i;
+                    absoluteUniverse = c.startUniverse + remaining;
+                    return true;
+                }
+                remaining -= count;
             }
-            return -1;
+            return false;
         }
 
         /// <summary>

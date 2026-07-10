@@ -69,6 +69,16 @@ namespace Laps.Routing
         // ── API publique ────────────────────────────────────────
 
         /// <summary>
+        /// Démarre une frame DMX : tous les univers envoyés ensuite partagent le même
+        /// numéro de séquence ArtNet (évite le clignotement sur multi-univers).
+        /// </summary>
+        public void BeginFrame()
+        {
+            // 0 = séquence désactivée (recommandé Art-Net pour multi-univers synchronisés)
+            _sequence = 0;
+        }
+
+        /// <summary>
         /// Envoie un univers DMX complet vers une adresse IP.
         /// </summary>
         /// <param name="ip">Adresse IP du contrôleur</param>
@@ -100,9 +110,6 @@ namespace Laps.Routing
                 var endpoint = new IPEndPoint(IPAddress.Parse(ip), ARTNET_PORT);
                 int totalSize = HEADER_SIZE + dataLength;
                 _udpClient.Send(_packetBuffer, totalSize, endpoint);
-
-                // Incrémenter séquence (1-255)
-                _sequence = _sequence == 255 ? (byte)1 : (byte)(_sequence + 1);
 
                 PacketsSent++;
                 _packetsThisSecond++;

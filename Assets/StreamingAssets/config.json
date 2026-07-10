@@ -35,5 +35,10 @@
     "serpentine": false,
     "strips": [],
     "lyres": []
+  },
+  "router": {
+    "files": {
+      "entityMappingCsv": "mapping/led_wall_mapping.csv"
+    }
   }
 }

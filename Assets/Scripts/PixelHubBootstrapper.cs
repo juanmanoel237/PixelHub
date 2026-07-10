@@ -22,6 +22,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     [SerializeField] private RoutingEngine  _routingEngine;
     [SerializeField] private ShowTimeline   _showTimeline;
     [SerializeField] private DebugPanel     _debugPanel;
+    [SerializeField] private EHubReceiver   _eHubReceiver;
     [SerializeField] private AudioReactiveProvider _audioReactive;
     [SerializeField] private VideoCaptureProvider _videoCapture;
 
@@ -34,31 +35,28 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     public enum StartMode
     {
-        Timeline,    // Authoring classique via ShowTimeline
-        Debug,       // Fake state via DebugPanel (pour tester les contrôleurs)
-        Manual,      // L'utilisateur choisit via l'UI
-        VideoCapture // Démarre directement sur la caméra
+        Timeline,     // Authoring classique via ShowTimeline
+        Debug,        // Fake state via DebugPanel (pour tester les contrôleurs)
+        EHub,         // Réception eHuB UDP (P7 bonus)
+        Manual,       // L'utilisateur choisit via l'UI
+        VideoCapture  // Démarre directement sur la caméra
     }
 
     private void Awake()
     {
-        // Auto-câblage si la scène n'a que ConfigManager (cas actuel du projet)
         EnsureComponents();
     }
 
     private void Start()
     {
-        // La config est chargée par ConfigManager.Awake() — on attend juste qu'elle soit prête
         if (ConfigManager.Config == null)
         {
             Debug.LogError("[PixelHubBootstrapper] ConfigManager non trouvé ou config non chargée !");
             return;
         }
 
-        // Connecter le DebugPanel au RoutingEngine
         _debugPanel?.SetRoutingEngine(_routingEngine);
 
-        // Choisir le state provider selon le mode
         switch (_startMode)
         {
             case StartMode.Timeline:
@@ -76,11 +74,17 @@ public class PixelHubBootstrapper : MonoBehaviour
                 Debug.Log("[PixelHubBootstrapper] Mode Debug actif (fake state).");
                 break;
 
+            case StartMode.EHub:
+                _routingEngine.SetStateProvider(_eHubReceiver);
+                _currentMode = StartMode.EHub;
+                Debug.Log("[PixelHubBootstrapper] Mode eHuB actif (réception UDP).");
+                break;
+
             case StartMode.Manual:
                 _currentMode = StartMode.Manual;
                 Debug.Log("[PixelHubBootstrapper] Mode Manuel — en attente de sélection via l'UI.");
                 break;
-                
+
             case StartMode.VideoCapture:
                 _showTimeline.LoadShow();
                 _showTimeline.Play();
@@ -88,16 +92,14 @@ public class PixelHubBootstrapper : MonoBehaviour
                 break;
         }
 
-        // Démarrer le thread de routage
         _routingEngine.StartRouting();
 
-        // Prévisualisation à l'écran (onglet Game)
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | A=audio-reactif | V=video-capture");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
     }
 
     private void Update()
@@ -106,7 +108,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToTimeline();
         else if (Input.GetKeyDown(KeyCode.D))
             SwitchToDebug();
-        // AZERTY : la touche "A" correspond souvent à KeyCode.Q
+        else if (Input.GetKeyDown(KeyCode.E))
+            SwitchToEHub();
         else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.Q))
             SwitchToAudioReactive();
         else if (Input.GetKeyDown(KeyCode.V))
@@ -149,13 +152,13 @@ public class PixelHubBootstrapper : MonoBehaviour
             _showTimeline = GetComponent<ShowTimeline>() ?? gameObject.AddComponent<ShowTimeline>();
         if (_debugPanel == null)
             _debugPanel = GetComponent<DebugPanel>() ?? gameObject.AddComponent<DebugPanel>();
+        if (_eHubReceiver == null)
+            _eHubReceiver = GetComponent<EHubReceiver>() ?? gameObject.AddComponent<EHubReceiver>();
         if (_audioReactive == null)
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
         if (_videoCapture == null)
             _videoCapture = FindObjectOfType<VideoCaptureProvider>();
     }
-
-    // ── API pour l'UI ─────────────────────────────────────────
 
     public void SwitchToTimeline()
     {
@@ -180,11 +183,20 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] Mode Debug actif.");
     }
 
+    public void SwitchToEHub()
+    {
+        _routingEngine.StopRoutingThread();
+        _routingEngine.SetStateProvider(_eHubReceiver);
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.EHub;
+        UpdatePreviewProvider();
+        Debug.Log("[PixelHubBootstrapper] Mode eHuB actif.");
+    }
+
     public void SwitchToAudioReactive()
     {
         _routingEngine.StopRoutingThread();
 
-        // Relier l'AudioSource de ShowDirector (Unity Timeline) et relancer la musique
         var director = FindObjectOfType<PlayableDirector>();
         if (director != null)
         {
@@ -208,7 +220,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         if (_videoCapture == null) _videoCapture = FindObjectOfType<VideoCaptureProvider>();
         if (_videoCapture == null) return;
-        
+
         _routingEngine.StopRoutingThread();
         _routingEngine.SetStateProvider(_videoCapture);
         _routingEngine.StartRouting();
@@ -224,6 +236,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             _previewOverlay.SetProvider(_showTimeline, "Timeline");
         else if (_currentMode == StartMode.Debug)
             _previewOverlay.SetProvider(_debugPanel, "Debug");
+        else if (_currentMode == StartMode.EHub)
+            _previewOverlay.SetProvider(_eHubReceiver, "eHuB — UDP");
     }
 
     public void PlayShow()    => _showTimeline?.Play();
