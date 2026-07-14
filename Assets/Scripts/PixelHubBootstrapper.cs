@@ -140,6 +140,53 @@ public class PixelHubBootstrapper : MonoBehaviour
             SwitchToDebug();
             _debugPanel?.SendBlackOut();
         }
+        else if (Input.GetKeyDown(KeyCode.F1))
+            TestMovingHead(1);
+        else if (Input.GetKeyDown(KeyCode.F2))
+            TestMovingHead(2);
+        else if (Input.GetKeyDown(KeyCode.F3))
+            TestMovingHead(3);
+        else if (Input.GetKeyDown(KeyCode.F4))
+            TestMovingHead(4);
+        else if (Input.GetKeyDown(KeyCode.Alpha6))
+            TestMovingHead(1);
+        else if (Input.GetKeyDown(KeyCode.Alpha7))
+            TestMovingHead(2);
+        else if (Input.GetKeyDown(KeyCode.Alpha8))
+            TestMovingHead(3);
+        else if (Input.GetKeyDown(KeyCode.Alpha9))
+            TestMovingHead(4);
+        else if (Input.GetKeyDown(KeyCode.P))
+        {
+            EnsureDebugMode();
+            _debugPanel?.SetLyreTest("StaticProjector", true, new Color32(255, 255, 255, 255), blackoutWall: false);
+            _previewOverlay?.SetProvider(_debugPanel, "Lyres — StaticProjector ON");
+        }
+        else if (Input.GetKeyDown(KeyCode.F5))
+        {
+            SwitchToDebug();
+            _debugPanel?.BlackOutLyres();
+        }
+    }
+
+    private void TestMovingHead(int headIndex)
+    {
+        EnsureDebugMode();
+        string name = $"MovingHead{headIndex}";
+        _debugPanel?.SetLyreTest(name, true, new Color32(255, 255, 255, 255), blackoutWall: true);
+        _previewOverlay?.SetProvider(_debugPanel, $"Lyres — {name} ON");
+    }
+
+    /// <summary>Active le debug sans redémarrer le thread routage si déjà en mode debug.</summary>
+    private void EnsureDebugMode()
+    {
+        if (_currentMode == StartMode.Debug)
+        {
+            _debugPanel.SetFakeStateActive(true);
+            _routingEngine.SetStateProvider(_debugPanel);
+            return;
+        }
+        SwitchToDebug();
     }
 
     private void EnsureComponents()

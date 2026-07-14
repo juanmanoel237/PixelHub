@@ -215,6 +215,8 @@ namespace Laps.Routing
             {
                 foreach (var lyreState in lyres)
                 {
+                    if (lyreState == null) continue;
+
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
@@ -229,14 +231,40 @@ namespace Laps.Routing
                     }
 
                     int ch = lyreCfg.startChannel - 1;
-                    buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan,    0, 255);
-                    buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt,   0, 255);
-                    buf[ch + 2] = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
-                    buf[ch + 3] = lyreState.color.r;
-                    buf[ch + 4] = lyreState.color.g;
-                    buf[ch + 5] = lyreState.color.b;
-                    buf[ch + 6] = (byte)Mathf.Clamp(lyreState.strobe, 0, 255);
-                    buf[ch + 7] = (byte)Mathf.Clamp(lyreState.gobo,   0, 255);
+                    byte dim = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
+
+                    if (lyreState.lyreName == "StaticProjector")
+                    {
+                        // Ne pas envoyer RGB blanc si dimmer=0 (sinon le projecteur s'allume au démarrage)
+                        if (dim == 0) continue;
+
+                        buf[ch + 0] = lyreState.color.r;
+                        buf[ch + 1] = lyreState.color.g;
+                        buf[ch + 2] = lyreState.color.b;
+                        buf[ch + 3] = dim;
+                    }
+                    else
+                    {
+                        buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan, 0, 255);
+                        buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt, 0, 255);
+                        if (dim == 0) continue;
+
+                        byte stro = (byte)Mathf.Clamp(lyreState.strobe, 0, 255);
+                        byte gobo = (byte)Mathf.Clamp(lyreState.gobo, 0, 255);
+
+                        WriteIfInRange(buf, ch + 2, dim);
+                        WriteIfInRange(buf, ch + 5, dim);
+                        WriteIfInRange(buf, ch + 3, lyreState.color.r);
+                        WriteIfInRange(buf, ch + 4, lyreState.color.g);
+                        WriteIfInRange(buf, ch + 5, lyreState.color.b);
+                        WriteIfInRange(buf, ch + 7, lyreState.color.r);
+                        WriteIfInRange(buf, ch + 8, lyreState.color.g);
+                        WriteIfInRange(buf, ch + 9, lyreState.color.b);
+                        WriteIfInRange(buf, ch + 6, stro);
+                        WriteIfInRange(buf, ch + 10, stro);
+                        WriteIfInRange(buf, ch + 7, gobo);
+                        WriteIfInRange(buf, ch + 11, gobo);
+                    }
                 }
             }
 
@@ -244,10 +272,7 @@ namespace Laps.Routing
 
             _universesToSend.Clear();
             foreach (var kvp in _dmxBuffers)
-            {
-                if (HasNonZeroData(kvp.Value))
-                    _universesToSend.Add(kvp.Key);
-            }
+                _universesToSend.Add(kvp.Key);
             _universesToSend.Sort();
 
             for (int i = 0; i < _universesToSend.Count; i++)
@@ -343,6 +368,12 @@ namespace Laps.Routing
                     return i;
             }
             return -1;
+        }
+
+        private static void WriteIfInRange(byte[] buf, int index, byte value)
+        {
+            if (buf == null || index < 0 || index >= buf.Length) return;
+            buf[index] = value;
         }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)

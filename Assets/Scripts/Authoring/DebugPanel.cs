@@ -35,7 +35,7 @@ namespace Laps.Authoring
         // ── Références internes ──────────────────────────────────
         private RoutingEngine _routingEngine;
         private Color32[] _fakeState;
-        private LyreState[] _emptyLyres = new LyreState[0];
+        private LyreState[] _fakeLyres;
         private Texture2D _previewTexture;
 
         private Color _lastFakeColor;
@@ -44,10 +44,11 @@ namespace Laps.Authoring
         private int _screenWidth;
         private int _screenHeight;
         private float _statsTimer;
+        public string LastLyreStatus { get; private set; } = "Lyres : aucune";
 
         // ── IStateProvider (mode Fake) ───────────────────────────
         public Color32[] GetState()      => _fakeState;
-        public LyreState[] GetLyreStates() => _emptyLyres;
+        public LyreState[] GetLyreStates() => _fakeLyres ?? System.Array.Empty<LyreState>();
 
         // ── Unity Lifecycle ──────────────────────────────────────
 
@@ -155,6 +156,87 @@ namespace Laps.Authoring
             UpdateFakeState();
         }
 
+        public void SetLyreOff(string lyreName)
+        {
+            SetLyreTest(lyreName, false, new Color32(0, 0, 0, 255), blackoutWall: false);
+        }
+
+        public void SetLyreTest(int index, bool enabled, Color32 color)
+        {
+            if (_fakeLyres == null || index < 0 || index >= _fakeLyres.Length) return;
+            SetLyreTest(_fakeLyres[index].lyreName, enabled, color);
+        }
+
+        public void SetLyreTest(string lyreName, bool enabled, Color32 color, bool blackoutWall = true)
+        {
+            if (_fakeLyres == null || string.IsNullOrEmpty(lyreName)) return;
+
+            // Éteindre le mur LED seulement (pas les autres lyres)
+            if (blackoutWall && _fakeState != null)
+            {
+                for (int i = 0; i < _fakeState.Length; i++)
+                    _fakeState[i] = Color.black;
+                _lastFakeEffect = EffectType.BlackOut;
+                _lastFakeColor = Color.black;
+                _lastFirstLedOnly = false;
+            }
+
+            for (int i = 0; i < _fakeLyres.Length; i++)
+            {
+                if (_fakeLyres[i].lyreName != lyreName) continue;
+
+                var s = _fakeLyres[i];
+                s.pan = 127;
+                s.tilt = 127;
+                s.dimmer = enabled ? 255 : 0;
+                s.color = color;
+                s.strobe = 0;
+                s.gobo = 0;
+                _fakeLyres[i] = s;
+                break;
+            }
+
+            _fakeStateActive = true;
+            UpdateLyreStatus(lyreName, enabled);
+
+            var cfg = ConfigManager.Config?.mapping?.lyres;
+            if (cfg != null)
+            {
+                foreach (var l in cfg)
+                {
+                    if (l.name == lyreName)
+                    {
+                        Debug.Log($"[DebugPanel] ★ LYRE {lyreName} → {l.controllerIp} univ {l.universe} canal {l.startChannel} dimmer={(enabled ? 255 : 0)} | Mur LED = OFF");
+                        break;
+                    }
+                }
+            }
+        }
+
+        public void BlackOutLyres()
+        {
+            if (_fakeLyres == null) return;
+            for (int i = 0; i < _fakeLyres.Length; i++)
+            {
+                var s = _fakeLyres[i];
+                s.dimmer = 0;
+                s.strobe = 0;
+                _fakeLyres[i] = s;
+            }
+            _fakeStateActive = true;
+            LastLyreStatus = "Lyres : toutes OFF";
+        }
+
+        private void UpdateLyreStatus(string activeName, bool enabled)
+        {
+            if (!enabled)
+            {
+                LastLyreStatus = "Lyres : toutes OFF";
+                return;
+            }
+            LastLyreStatus = $"Lyre ON : {activeName} (regarde le plafond, pas le mur)";
+        }
+
         // ── Stats ─────────────────────────────────────────────────
 
         private void UpdateStats()
@@ -179,6 +261,8 @@ namespace Laps.Authoring
                 sb.AppendLine($"LEDs          : {ConfigManager.Config.mapping.ledCount}");
                 sb.AppendLine($"Ecran         : {ConfigManager.Config.mapping.screenWidth}×{ConfigManager.Config.mapping.screenHeight}");
                 sb.AppendLine($"Contrôleurs   : {ConfigManager.Config.network.controllers?.Length ?? 0}");
+                sb.AppendLine($"Lyres         : {ConfigManager.Config.mapping.lyres?.Length ?? 0}");
+                sb.AppendLine(LastLyreStatus);
                 sb.AppendLine($"Fake state    : {(_fakeStateActive ? "ACTIF" : "inactif")}");
             }
 
@@ -213,6 +297,22 @@ namespace Laps.Authoring
             _screenWidth  = cfg.mapping.screenWidth  > 0 ? cfg.mapping.screenWidth  : 128;
             _screenHeight = cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 130;
             _fakeState = new Color32[cfg.mapping.ledCount];
+
+            int lyreCount = cfg.mapping.lyres?.Length ?? 0;
+            _fakeLyres = new LyreState[lyreCount];
+            for (int i = 0; i < lyreCount; i++)
+            {
+                _fakeLyres[i] = new LyreState
+                {
+                    lyreName = cfg.mapping.lyres[i].name,
+                    pan = 127,
+                    tilt = 127,
+                    dimmer = 0,
+                    color = new Color32(0, 0, 0, 255),
+                    strobe = 0,
+                    gobo = 0
+                };
+            }
 
             // Recréer la texture de prévisualisation
             if (_previewTexture != null) Destroy(_previewTexture);

@@ -85,7 +85,7 @@ namespace Laps.Authoring
             int previewW = previewMax;
             int previewH = Mathf.RoundToInt(previewMax / aspect);
 
-            GUI.Box(new Rect(margin, margin, 260, 154), "PixelHub — envoi Art-Net");
+            GUI.Box(new Rect(margin, margin, 280, 200), "PixelHub — envoi Art-Net");
 
             float y = margin + 22;
             GUI.Label(new Rect(margin + 8, y, 244, 18), $"Mode : {_modeLabel}");
@@ -130,16 +130,40 @@ namespace Laps.Authoring
 
             if (_routingEngine != null)
             {
-                GUI.Label(new Rect(margin + 8, y, 244, 18), $"Paquets/s : {_routingEngine.PacketsPerSecond:F1}");
+                GUI.Label(new Rect(margin + 8, y, 264, 18), $"Paquets/s : {_routingEngine.PacketsPerSecond:F1}");
                 y += 18;
-                GUI.Label(new Rect(margin + 8, y, 244, 18), $"Total envoyés : {_routingEngine.PacketsSentTotal}");
+                GUI.Label(new Rect(margin + 8, y, 264, 18), $"Total envoyés : {_routingEngine.PacketsSentTotal}");
                 y += 18;
+            }
+
+            if (_provider is DebugPanel debugPanel)
+            {
+                GUI.color = new Color(1f, 0.9f, 0.3f);
+                GUI.Label(new Rect(margin + 8, y, 264, 36), debugPanel.LastLyreStatus);
+                GUI.color = Color.white;
+                y += 36;
+            }
+            else if (_provider != null)
+            {
+                var lyres = _provider.GetLyreStates();
+                if (lyres != null && lyres.Length > 0)
+                {
+                    GUI.Label(new Rect(margin + 8, y, 264, 18), $"Lyres config : {lyres.Length}");
+                    y += 18;
+                }
             }
 
             if (ConfigManager.Config?.network.controllers?.Length > 0)
             {
                 var c = ConfigManager.Config.network.controllers[0];
-                GUI.Label(new Rect(margin + 8, y, 244, 18), $"→ {c.ip}:6454  startUniv.{c.startUniverse}");
+                GUI.Label(new Rect(margin + 8, y, 264, 18), $"Mur LED → {c.ip}:6454");
+                y += 18;
+            }
+
+            if (ConfigManager.Config?.mapping?.lyres?.Length > 0)
+            {
+                var lyre = ConfigManager.Config.mapping.lyres[0];
+                GUI.Label(new Rect(margin + 8, y, 264, 18), $"Lyres → {lyre.controllerIp} univ {lyre.universe}");
             }
 
             if (_previewTexture != null)
@@ -149,8 +173,8 @@ namespace Laps.Authoring
                 GUI.DrawTexture(new Rect(x, margin + 18, previewW, previewH), _previewTexture, ScaleMode.ScaleToFit);
             }
 
-            GUI.Label(new Rect(margin, Screen.height - 28, Screen.width - margin * 2, 22),
-                "Onglet GAME (pas Scene). Touches : 1 / R / G / B / 0 / T / A (audio)");
+            GUI.Label(new Rect(margin, Screen.height - 44, Screen.width - margin * 2, 40),
+                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres (plafond) : F1-F4 ou 6-9 | P=statique | F5=off lyres | T/E/A/V=autres modes");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
