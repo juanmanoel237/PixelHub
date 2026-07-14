@@ -21,6 +21,9 @@ namespace Laps.Authoring
         private float _bassPeak;
         private float _highPeak;
 
+        // Référence au renderer vidéo (combat_fond_noir.mp4)
+        private VideoOverlayRenderer _videoOverlay;
+
         public void Init(RoutingEngine routing)
         {
             _routingEngine = routing;
@@ -44,6 +47,9 @@ namespace Laps.Authoring
         {
             ConfigManager.OnConfigReloaded += InitBuffers;
             if (ConfigManager.Config != null) InitBuffers();
+
+            // Cherche le VideoOverlayRenderer (créé par le Bootstrapper)
+            _videoOverlay = FindObjectOfType<VideoOverlayRenderer>();
         }
 
         private void OnDestroy()
@@ -186,6 +192,41 @@ namespace Laps.Authoring
                 int x = Screen.width - previewW - margin;
                 GUI.Box(new Rect(x - 4, margin - 4, previewW + 8, previewH + 28), "Aperçu LEDs (simulation)");
                 GUI.DrawTexture(new Rect(x, margin + 18, previewW, previewH), _previewTexture, ScaleMode.ScaleToFit);
+
+                // ── Vidéo combat au premier plan, en bas du cadre Aperçu LEDs ──
+                // Utilise un shader luma-key pour rendre le fond noir transparent
+                if (_videoOverlay == null)
+                    _videoOverlay = FindObjectOfType<VideoOverlayRenderer>();
+
+                var videoTex = _videoOverlay != null ? _videoOverlay.VideoTexture : null;
+                var lumaMat  = _videoOverlay != null ? _videoOverlay.LumaKeyMaterial : null;
+                if (videoTex != null)
+                {
+                    float previewX = x;
+                    float previewY = margin + 18;
+
+                    float videoAspect = (float)videoTex.width / videoTex.height;
+                    // La vidéo occupe toute la largeur du cadre, ratio préservé
+                    float vidW = previewW;
+                    float vidH = vidW / videoAspect;
+                    // Collée en bas du cadre preview
+                    float vidX = previewX;
+                    float vidY = previewY + previewH - vidH;
+
+                    var vidRect = new Rect(vidX, vidY, vidW, vidH);
+
+                    if (lumaMat != null)
+                    {
+                        // Graphics.DrawTexture avec le matériau luma-key
+                        // → fond noir = transparent, stickmen visibles par-dessus les LEDs
+                        Graphics.DrawTexture(vidRect, videoTex, lumaMat);
+                    }
+                    else
+                    {
+                        // Fallback sans shader
+                        GUI.DrawTexture(vidRect, videoTex, ScaleMode.ScaleToFit);
+                    }
+                }
             }
 
             GUI.Label(new Rect(margin, Screen.height - 28, Screen.width - margin * 2, 22),
