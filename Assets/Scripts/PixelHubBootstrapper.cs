@@ -49,6 +49,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         _eHub = GetComponent<EHubNetworkBridge>() ?? gameObject.AddComponent<EHubNetworkBridge>();
         if (GetComponent<EHubControlPanel>() == null)
             gameObject.AddComponent<EHubControlPanel>();
+        if (GetComponent<RouterConfigPanel>() == null)
+            gameObject.AddComponent<RouterConfigPanel>();
 
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
@@ -108,6 +110,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
+        Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
     }
 
     private void Update()

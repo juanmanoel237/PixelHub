@@ -213,7 +213,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 44, Screen.width - margin * 2, 40),
-                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres : F1/F4/6-9/P/F5 | T/E/A/V=modes | eHub : panneau bas");
+                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres : F1/F4/6-9/P/F5 | F6=config IP | T/E/A/V=modes | eHub : panneau bas");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
