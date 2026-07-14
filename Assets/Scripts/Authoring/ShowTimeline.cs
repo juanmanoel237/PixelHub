@@ -62,6 +62,8 @@ namespace Laps.Authoring
         [Header("Show")]
         [SerializeField] private AudioSource _audioSource;
         [SerializeField] private string _showFileName = "show.json";
+        [Tooltip("Si la musique est déjà gérée par un PlayableDirector/Timeline, laisse cette option désactivée pour éviter un doublon.")]
+        [SerializeField] private bool _playAudioOnPlay = false;
 
         // ── État interne ────────────────────────────────────────
         private ShowData _showData;
@@ -112,7 +114,7 @@ namespace Laps.Authoring
         public void Play()
         {
             IsPlaying = true;
-            if (_audioSource != null) _audioSource.Play();
+            if (_playAudioOnPlay && _audioSource != null) _audioSource.Play();
             Debug.Log("[ShowTimeline] Lecture démarrée.");
         }
 

@@ -40,8 +40,11 @@ namespace Laps.Core
     public class NetworkConfig
     {
         public ControllerConfig[] controllers;
-        public int eHubPort;
-        public int artNetPort;
+        public bool eHubEnabled;      // Active la sync multi-postes
+        public int eHubPort;          // Port UDP eHub (défaut 9000)
+        public string eHubSessionId;  // Code équipe — isole du reste de la classe
+        public string[] eHubPeers;    // IPs des autres postes de VOTRE équipe (unicast)
+        public int artNetPort;        // Port ArtNet standard = 6454
     }
 
     [Serializable]
@@ -189,7 +192,10 @@ namespace Laps.Core
                         new ControllerConfig { ip = "192.168.1.47", startUniverse = 0, universeCount = 32 },
                         new ControllerConfig { ip = "192.168.1.48", startUniverse = 0, universeCount = 32 }
                     },
+                    eHubEnabled = true,
                     eHubPort = 9000,
+                    eHubSessionId = "mon-equipe",
+                    eHubPeers = new string[0],
                     artNetPort = 6454
                 },
                 mapping = new MappingConfig

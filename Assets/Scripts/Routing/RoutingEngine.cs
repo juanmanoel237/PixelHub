@@ -53,6 +53,23 @@ namespace Laps.Routing
         public float  RoutingFps { get; private set; }
         public float  RoutingMs  { get; private set; }
 
+        /// <summary>État LED final (animation + feux d'artifice) tel qu'envoyé en Art-Net.</summary>
+        public bool TryGetDisplaySnapshot(out Color32[] snapshot)
+        {
+            lock (_lock)
+            {
+                if (_readBuffer == null || _readBuffer.Length == 0)
+                {
+                    snapshot = null;
+                    return false;
+                }
+
+                snapshot = new Color32[_readBuffer.Length];
+                Array.Copy(_readBuffer, snapshot, _readBuffer.Length);
+                return true;
+            }
+        }
+
         // ── Unity Lifecycle ────────────────────────────────────
 
         private void Awake()
@@ -119,6 +136,8 @@ namespace Laps.Routing
         {
             if (_stateProvider == null) return;
 
+            LedFireworks.Tick(Time.deltaTime);
+
             Color32[] state = _stateProvider.GetState();
             LyreState[] lyres = _stateProvider.GetLyreStates();
             IReadOnlyList<EntityColor> entities = null;
@@ -133,6 +152,15 @@ namespace Laps.Routing
                         _writeBuffer = new Color32[state.Length];
 
                     Array.Copy(state, _writeBuffer, state.Length);
+
+                    var map = ConfigManager.Config?.mapping;
+                    if (map != null)
+                    {
+                        LedFireworks.CompositeOnto(
+                            _writeBuffer,
+                            map.screenWidth > 0 ? map.screenWidth : 128,
+                            map.screenHeight > 0 ? map.screenHeight : 128);
+                    }
 
                     Color32[] tmp = _readBuffer;
                     _readBuffer = _writeBuffer;
@@ -220,14 +248,14 @@ namespace Laps.Routing
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    int ctrlIndex = FindControllerIndexByIp(config, lyreCfg.controllerIp);
-                    if (ctrlIndex < 0) continue;
+                    int lyreControllerIndex = FindControllerIndexByIp(lyreCfg.controllerIp, config);
+                    if (lyreControllerIndex < 0) continue;
 
-                    int key = DmxBufferKey(ctrlIndex, lyreCfg.universe);
-                    if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
+                    int lyreKey = (lyreControllerIndex << 16) | (lyreCfg.universe & 0xFFFF);
+                    if (!_dmxBuffers.TryGetValue(lyreKey, out byte[] buf))
                     {
                         buf = new byte[512];
-                        _dmxBuffers[key] = buf;
+                        _dmxBuffers[lyreKey] = buf;
                     }
 
                     int ch = lyreCfg.startChannel - 1;
@@ -235,7 +263,6 @@ namespace Laps.Routing
 
                     if (lyreState.lyreName == "StaticProjector")
                     {
-                        // Ne pas envoyer RGB blanc si dimmer=0 (sinon le projecteur s'allume au démarrage)
                         if (dim == 0) continue;
 
                         buf[ch + 0] = lyreState.color.r;
@@ -359,29 +386,29 @@ namespace Laps.Routing
             return false;
         }
 
-        private static int FindControllerIndexByIp(AppConfig config, string ip)
-        {
-            if (config?.network?.controllers == null || string.IsNullOrEmpty(ip)) return -1;
-            for (int i = 0; i < config.network.controllers.Length; i++)
-            {
-                if (config.network.controllers[i].ip == ip)
-                    return i;
-            }
-            return -1;
-        }
-
-        private static void WriteIfInRange(byte[] buf, int index, byte value)
-        {
-            if (buf == null || index < 0 || index >= buf.Length) return;
-            buf[index] = value;
-        }
-
         private LyreConfig FindLyreConfig(string name, AppConfig config)
         {
             if (config.mapping.lyres == null) return null;
             foreach (var l in config.mapping.lyres)
                 if (l.name == name) return l;
             return null;
+        }
+
+        private static int FindControllerIndexByIp(string ip, AppConfig config)
+        {
+            if (string.IsNullOrEmpty(ip) || config?.network?.controllers == null) return -1;
+            for (int i = 0; i < config.network.controllers.Length; i++)
+            {
+                if (config.network.controllers[i].ip == ip) return i;
+            }
+            return -1;
+        }
+
+        private static void WriteIfInRange(byte[] buf, int index, byte value)
+        {
+            if (buf == null) return;
+            if (index < 0 || index >= buf.Length) return;
+            buf[index] = value;
         }
 
         private void OnConfigReloaded()

@@ -29,7 +29,15 @@ namespace Laps.Authoring
         public void SetProvider(IStateProvider provider, string modeLabel)
         {
             _provider = provider;
-            _modeLabel = modeLabel;
+            _modeLabel = modeLabel ?? "—";
+            _refreshTimer = 0f;
+            ForceRefresh();
+        }
+
+        /// <summary>Rafraîchit tout de suite l'aperçu (sync eHub / changement de mode).</summary>
+        public void ForceRefresh()
+        {
+            RefreshPreview();
         }
 
         private void Awake()
@@ -56,7 +64,8 @@ namespace Laps.Authoring
 
         private void Update()
         {
-            _refreshTimer += Time.deltaTime;
+            // unscaledDeltaTime : l'aperçu continue même en pause (sync eHub)
+            _refreshTimer += Time.unscaledDeltaTime;
             if (_refreshTimer < 0.05f) return;
             _refreshTimer = 0f;
             RefreshPreview();
@@ -64,13 +73,30 @@ namespace Laps.Authoring
 
         private void RefreshPreview()
         {
-            if (_provider == null || _previewTexture == null) return;
-            Color32[] state = _provider.GetState();
+            if (_previewTexture == null) return;
+
+            Color32[] state = null;
+            if (_routingEngine != null && _routingEngine.TryGetDisplaySnapshot(out Color32[] routed))
+                state = routed;
+
+            if (state == null)
+            {
+                if (_provider == null) return;
+                state = _provider.GetState();
+                if (state == null || state.Length == 0) return;
+
+                int len = Mathf.Min(state.Length, _screenWidth * _screenHeight);
+                var copy = new Color32[len];
+                System.Array.Copy(state, copy, len);
+                LedFireworks.CompositeOnto(copy, _screenWidth, _screenHeight);
+                state = copy;
+            }
+
             if (state == null || state.Length == 0) return;
 
-            int len = Mathf.Min(state.Length, _screenWidth * _screenHeight);
-            var pixels = new Color[len];
-            for (int i = 0; i < len; i++)
+            int pixelCount = Mathf.Min(state.Length, _screenWidth * _screenHeight);
+            var pixels = new Color[pixelCount];
+            for (int i = 0; i < pixelCount; i++)
                 pixels[i] = state[i];
 
             _previewTexture.SetPixels(pixels);
@@ -136,6 +162,19 @@ namespace Laps.Authoring
                 y += 18;
             }
 
+            if (EHubStatus.Enabled)
+            {
+                if (EHubStatus.Connected)
+                {
+                    string role = EHubStatus.Role == EHubRole.Host ? "Hôte" : $"Client → {EHubStatus.HostIp}";
+                    GUI.Label(new Rect(margin + 8, y, 244, 18),
+                        $"eHub {role} — {EHubStatus.TotalPostes} poste(s)");
+                }
+                else
+                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — connectez-vous (panneau bas)");
+                y += 18;
+            }
+
             if (_provider is DebugPanel debugPanel)
             {
                 GUI.color = new Color(1f, 0.9f, 0.3f);
@@ -148,7 +187,7 @@ namespace Laps.Authoring
                 var lyres = _provider.GetLyreStates();
                 if (lyres != null && lyres.Length > 0)
                 {
-                    GUI.Label(new Rect(margin + 8, y, 264, 18), $"Lyres config : {lyres.Length}");
+                    GUI.Label(new Rect(margin + 8, y, 264, 18), $"Lyres actives : {lyres.Length}");
                     y += 18;
                 }
             }
@@ -174,7 +213,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 44, Screen.width - margin * 2, 40),
-                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres (plafond) : F1-F4 ou 6-9 | P=statique | F5=off lyres | T/E/A/V=autres modes");
+                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres : F1/F4/6-9/P/F5 | T/E/A/V=modes | eHub : panneau bas");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
