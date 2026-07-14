@@ -6,11 +6,13 @@ namespace Laps.Core
     public enum FireworkStyle
     {
         ClassicNova,
-        SparkleFountain
+        SparkleFountain,
+        FlameThrowerLeft,
+        FlameThrowerRight
     }
 
     /// <summary>
-    /// Feux d'artifice 2D dessinés sur la grille LED (mur + aperçu), pas en 3D dans la scène.
+    /// Feux d'artifice et effets 2D dessinés sur la grille LED (mur + aperçu).
     /// </summary>
     public static class LedFireworks
     {
@@ -21,6 +23,8 @@ namespace Laps.Core
             public float Age;
             public float Lifetime;
             public Color32 Color;
+            public float Gravity;
+            public bool IsFlame;
         }
 
         private struct Burst
@@ -30,21 +34,94 @@ namespace Laps.Core
 
         private static readonly List<Burst> _bursts = new List<Burst>();
 
-        public static void Trigger(FireworkStyle style = FireworkStyle.ClassicNova)
+        private static readonly Color[] Palette = new Color[]
         {
-            float cx = Random.Range(0.22f, 0.78f);
-            float cy = Random.Range(0.22f, 0.78f);
-            Color baseColor = Random.ColorHSV(0f, 1f, 0.85f, 1f, 0.85f, 1f);
+            new Color(1f, 0.1f, 0.1f),   // Rouge vif
+            new Color(0.1f, 1f, 0.1f),   // Vert vif
+            new Color(0.1f, 0.5f, 1f),   // Bleu électrique
+            new Color(1f, 0.85f, 0f),    // Or / Jaune
+            new Color(1f, 0.45f, 0f),    // Orange
+            new Color(0.85f, 0.1f, 1f),  // Violet/Magenta vif
+            new Color(0f, 0.95f, 0.95f)  // Cyan
+        };
 
-            var particles = new List<Particle>(140);
-            int count = style == FireworkStyle.SparkleFountain ? 100 : 130;
+        public static void Trigger(FireworkStyle style = FireworkStyle.ClassicNova, Color? customColor = null, bool forceMulticolor = false)
+        {
+            float cx = 0.5f;
+            float cy = 0.5f;
+            Color baseColor = Color.white;
+            bool isMulticolor = forceMulticolor;
+            bool isFlame = (style == FireworkStyle.FlameThrowerLeft || style == FireworkStyle.FlameThrowerRight);
+
+            if (isFlame)
+            {
+                if (style == FireworkStyle.FlameThrowerLeft)
+                {
+                    cx = 0.08f; // En bas à gauche
+                    cy = 0.98f;
+                }
+                else
+                {
+                    cx = 0.92f; // En bas à droite
+                    cy = 0.98f;
+                }
+            }
+            else
+            {
+                cx = Random.Range(0.22f, 0.78f);
+                cy = Random.Range(0.22f, 0.78f);
+            }
+
+            if (!isFlame)
+            {
+                if (customColor.HasValue)
+                {
+                    baseColor = customColor.Value;
+                }
+                else
+                {
+                    // Par défaut, s'il n'y a pas de couleur personnalisée,
+                    // on a 20% de chance d'être multicolore, sinon on prend une couleur de la palette
+                    if (Random.value < 0.20f)
+                    {
+                        isMulticolor = true;
+                    }
+                    else
+                    {
+                        baseColor = Palette[Random.Range(0, Palette.Length)];
+                    }
+                }
+            }
+
+            int count = 130;
+            if (style == FireworkStyle.SparkleFountain)
+                count = 100;
+            else if (isFlame)
+                count = 70; // Particules pour la flamme
+
+            var particles = new List<Particle>(count);
 
             for (int i = 0; i < count; i++)
             {
                 float speed = Random.Range(0.35f, 0.95f);
-                float vx, vy;
+                float vx = 0f;
+                float vy = 0f;
+                float gravityVal = 0.55f;
+                float lifetime = Random.Range(0.7f, 1.6f);
 
-                if (style == FireworkStyle.SparkleFountain)
+                if (isFlame)
+                {
+                    // Projection vers le haut-droite ou haut-gauche
+                    float baseAngle = (style == FireworkStyle.FlameThrowerLeft) ? 25f : -25f;
+                    float angle = (baseAngle + Random.Range(-15f, 15f)) * Mathf.Deg2Rad;
+                    float flameSpeed = speed * 1.5f;
+
+                    vx = Mathf.Sin(angle) * flameSpeed;
+                    vy = -Mathf.Cos(angle) * flameSpeed;
+                    gravityVal = -0.65f; // Flottabilité de la flamme (gravité négative pour qu'elle monte)
+                    lifetime = Random.Range(0.5f, 0.9f); // Plus courte vie
+                }
+                else if (style == FireworkStyle.SparkleFountain)
                 {
                     float angle = Random.Range(-35f, 35f) * Mathf.Deg2Rad;
                     vx = Mathf.Sin(angle) * speed * 0.5f;
@@ -57,6 +134,8 @@ namespace Laps.Core
                     vy = Mathf.Sin(angle) * speed;
                 }
 
+                Color pColor = isMulticolor ? Palette[Random.Range(0, Palette.Length)] : baseColor;
+
                 particles.Add(new Particle
                 {
                     X = cx,
@@ -64,8 +143,10 @@ namespace Laps.Core
                     Vx = vx,
                     Vy = vy,
                     Age = 0f,
-                    Lifetime = Random.Range(0.7f, 1.6f),
-                    Color = (Color32)Color.Lerp(baseColor, Color.white, Random.Range(0f, 0.45f))
+                    Lifetime = lifetime,
+                    Color = (Color32)Color.Lerp(pColor, Color.white, Random.Range(0f, 0.45f)),
+                    Gravity = gravityVal,
+                    IsFlame = isFlame
                 });
             }
 
@@ -77,7 +158,6 @@ namespace Laps.Core
             if (_bursts.Count == 0) return;
 
             float dt = Mathf.Max(deltaTime, 0.0001f);
-            const float gravity = 0.55f;
 
             for (int b = _bursts.Count - 1; b >= 0; b--)
             {
@@ -91,7 +171,7 @@ namespace Laps.Core
                     if (p.Age >= p.Lifetime) continue;
 
                     anyAlive = true;
-                    p.Vy += gravity * dt;
+                    p.Vy += p.Gravity * dt;
                     p.X += p.Vx * dt;
                     p.Y += p.Vy * dt;
                     burst.Particles[i] = p;
@@ -104,7 +184,7 @@ namespace Laps.Core
             }
         }
 
-        /// <summary>Superpose les feux d'artifice actifs sur le buffer LED.</summary>
+        /// <summary>Superpose les effets actifs sur le buffer LED.</summary>
         public static void CompositeOnto(Color32[] buffer, int width, int height)
         {
             if (buffer == null || width <= 0 || height <= 0 || _bursts.Count == 0) return;
@@ -119,9 +199,36 @@ namespace Laps.Core
                     float fade = lifeT * lifeT;
                     float intensity = fade * 1.2f;
 
-                    PaintGlow(buffer, width, height, p.X, p.Y, p.Color, intensity);
+                    Color32 col = p.Color;
+                    if (p.IsFlame)
+                    {
+                        col = GetFlameColor(lifeT);
+                    }
+
+                    PaintGlow(buffer, width, height, p.X, p.Y, col, intensity);
                 }
             }
+        }
+
+        private static Color32 GetFlameColor(float lifeT)
+        {
+            Color c;
+            if (lifeT > 0.65f)
+            {
+                float t = (lifeT - 0.65f) / 0.35f;
+                c = Color.Lerp(new Color(1f, 0.5f, 0f), new Color(1f, 1f, 0.7f), t); // Fades de jaune-blanc à orange
+            }
+            else if (lifeT > 0.3f)
+            {
+                float t = (lifeT - 0.3f) / 0.35f;
+                c = Color.Lerp(new Color(0.9f, 0.1f, 0f), new Color(1f, 0.5f, 0f), t); // Fades d'orange à rouge
+            }
+            else
+            {
+                float t = lifeT / 0.3f;
+                c = Color.Lerp(new Color(0.25f, 0.02f, 0f), new Color(0.9f, 0.1f, 0f), t); // Fades de rouge à rouge sombre
+            }
+            return (Color32)c;
         }
 
         private static void PaintGlow(Color32[] buffer, int w, int h, float nx, float ny, Color32 col, float intensity)

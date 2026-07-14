@@ -79,6 +79,34 @@ namespace Laps.Authoring
         /// <summary>Déclenche un effet (son + VFX). Appelé localement ou depuis eHub.</summary>
         public void TriggerEffect(int mappingIndex, bool fromNetwork = false)
         {
+            // Cas particuliers pour les lance-flammes rapides (sans prefab/SFX obligatoires)
+            if (mappingIndex == -99)
+            {
+                LedFireworks.Trigger(FireworkStyle.FlameThrowerLeft);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -99
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -98)
+            {
+                LedFireworks.Trigger(FireworkStyle.FlameThrowerRight);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -98
+                    });
+                }
+                return;
+            }
+
             if (mappingIndex < 0 || mappingIndex >= soundMappings.Count) return;
 
             var mapping = soundMappings[mappingIndex];
@@ -88,13 +116,26 @@ namespace Laps.Authoring
 
             // 2. Feu d'artifice sur la grille LED (mur + aperçu), pas en 3D dans la scène
             FireworkStyle style = FireworkStyle.ClassicNova;
+            Color? customColor = null;
+            bool forceMulticolor = false;
+
             if (mapping.visualPrefab != null)
             {
                 var procedural = mapping.visualPrefab.GetComponent<ProceduralFirework>();
                 if (procedural != null)
+                {
                     style = procedural.style;
+                    if (!procedural.useRandomColor)
+                    {
+                        customColor = procedural.fireworkColor;
+                    }
+                    else
+                    {
+                        forceMulticolor = procedural.multicolor;
+                    }
+                }
             }
-            LedFireworks.Trigger(style);
+            LedFireworks.Trigger(style, customColor, forceMulticolor);
 
             if (!fromNetwork)
                 EHubSyncBus.PublishLocal(new EHubMessage
@@ -106,10 +147,21 @@ namespace Laps.Authoring
 
         private void HandleSoundEffects()
         {
+            // Déclenchement normal via mapping Inspector
             for (int i = 0; i < soundMappings.Count; i++)
             {
                 if (Input.GetKeyDown(soundMappings[i].key))
                     TriggerEffect(i, fromNetwork: false);
+            }
+
+            // Raccourcis clavier directs pour tester les lance-flammes (gauche/droite)
+            if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.F))
+            {
+                TriggerEffect(-99, fromNetwork: false);
+            }
+            if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.H))
+            {
+                TriggerEffect(-98, fromNetwork: false);
             }
         }
 
