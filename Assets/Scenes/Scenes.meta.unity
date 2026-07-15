@@ -229,7 +229,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!65 &492549548
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -697,7 +697,7 @@ MonoBehaviour:
   _debugPanel: {fileID: 0}
   _audioReactive: {fileID: 0}
   _videoCapture: {fileID: 0}
-  _startMode: 0
+  _startMode: 4
 --- !u!1001 &6829352580376196397
 PrefabInstance:
   m_ObjectHideFlags: 0

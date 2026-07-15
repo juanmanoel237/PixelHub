@@ -13,6 +13,16 @@ namespace Laps.Authoring
         [Tooltip("Style utilisé quand ce prefab est assigné à un SFX (dessiné sur les LEDs).")]
         public FireworkStyle style = FireworkStyle.ClassicNova;
 
+        [Header("Couleurs")]
+        [Tooltip("Si coché, le feu d'artifice utilisera les couleurs par défaut (aléatoire de la palette).")]
+        public bool useRandomColor = true;
+
+        [Tooltip("Si coché, l'explosion sera multicolore (effet arc-en-ciel). Ne s'applique que si 'useRandomColor' est coché.")]
+        public bool multicolor = false;
+
+        [Tooltip("Couleur personnalisée du feu d'artifice si 'useRandomColor' est décoché.")]
+        public Color fireworkColor = Color.cyan;
+
         // Le prefab sert de configuration ; le rendu réel est géré par LedFireworks (2D).
         void Awake() { }
     }

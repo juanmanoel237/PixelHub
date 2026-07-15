@@ -30,7 +30,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     private LedPreviewOverlay _previewOverlay;
 
     [Header("Mode de démarrage")]
-    [SerializeField] private StartMode _startMode = StartMode.Timeline;
+    [SerializeField] private StartMode _startMode = StartMode.VideoCapture;
 
     private StartMode _currentMode;
 
