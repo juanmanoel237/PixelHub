@@ -52,16 +52,8 @@ namespace Laps.Authoring
             _states[StaticIndex] = new LyreState
             {
                 lyreName = "StaticProjector",
-                dimmer = 180,
-                color = new Color32(255, 240, 220, 255)
-            };
-
-            var headColors = new[]
-            {
-                new Color32(255, 0, 180, 255),
-                new Color32(0, 200, 255, 255),
-                new Color32(255, 220, 0, 255),
-                new Color32(120, 0, 255, 255),
+                dimmer = 0,
+                color = new Color32(0, 0, 0, 255)
             };
 
             for (int i = 0; i < HeadCount; i++)
@@ -72,8 +64,8 @@ namespace Laps.Authoring
                     lyreName = $"MovingHead{i + 1}",
                     pan = 128f,
                     tilt = 128f,
-                    dimmer = 255,
-                    color = headColors[i],
+                    dimmer = 0,
+                    color = new Color32(0, 0, 0, 255),
                     strobe = 0f
                 };
             }
@@ -86,6 +78,41 @@ namespace Laps.Authoring
         }
 
         public LyreState[] GetLyreStates() => _states;
+
+        public void TestMovingHead(int headIndex)
+        {
+            if (headIndex < 1 || headIndex > HeadCount) return;
+            int idx = FirstHeadIndex + headIndex - 1;
+            var s = _states[idx];
+            s.pan = 128f;
+            s.tilt = 128f;
+            s.dimmer = 255;
+            s.color = new Color32(255, 255, 255, 255);
+            s.strobe = 0;
+            _states[idx] = s;
+            Debug.Log($"[OtherDevicesPanel] ★ MovingHead{headIndex} ON");
+        }
+
+        public void TestStaticProjector()
+        {
+            var s = _states[StaticIndex];
+            s.dimmer = 255;
+            s.color = new Color32(255, 255, 255, 255);
+            _states[StaticIndex] = s;
+            Debug.Log("[OtherDevicesPanel] ★ StaticProjector ON");
+        }
+
+        public void BlackOutAllLyres()
+        {
+            for (int i = 0; i < _states.Length; i++)
+            {
+                var s = _states[i];
+                s.dimmer = 0;
+                s.strobe = 0;
+                _states[i] = s;
+            }
+            Debug.Log("[OtherDevicesPanel] Lyres OFF");
+        }
 
         public void SetNightclubMode(bool enabled) => _nightclubMode = enabled;
 

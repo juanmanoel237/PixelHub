@@ -5,6 +5,18 @@ using Laps.Core;
 
 namespace Laps.Authoring
 {
+    [System.Serializable]
+    public class LyreCue
+    {
+        public string lyreName;
+        public bool enabled = true;
+        public Color32 color = new Color32(255, 255, 255, 255);
+        public float pan = 127f;
+        public float tilt = 127f;
+        public float dimmer = 255f;
+        public float strobe = 0f;
+    }
+
     /// <summary>
     /// Un keyframe de la timeline : déclenche un effet à un moment précis.
     /// </summary>
@@ -16,6 +28,7 @@ namespace Laps.Authoring
         public EffectType effectType;
         public EffectParameters parameters;
         public string label;             // Nom optionnel pour l'éditeur
+        public LyreCue lyreCue;          // Optionnel : pilotage lyre/projecteur
 
         public Keyframe()
         {
@@ -130,6 +143,7 @@ namespace Laps.Authoring
             if (_audioSource != null) _audioSource.Stop();
             _manualTime = 0f;
             FillBlack();
+            ResetLyres();
         }
 
         public void Seek(float time)
@@ -241,6 +255,59 @@ namespace Laps.Authoring
                 // Mélanger la couche dans l'état final
                 BlendLayer(_layerBuffer, _state, layer.opacity);
             }
+
+            EvaluateLyres(time);
+        }
+
+        private void EvaluateLyres(float time)
+        {
+            if (_lyreStates == null || _showData == null) return;
+
+            ResetLyres();
+
+            foreach (var layer in _showData.layers)
+            {
+                if (!layer.enabled || layer.keyframes.Count == 0) continue;
+
+                Keyframe active = FindActiveKeyframe(layer.keyframes, time);
+                if (active?.lyreCue == null || string.IsNullOrEmpty(active.lyreCue.lyreName))
+                    continue;
+
+                ApplyLyreCue(active.lyreCue);
+            }
+        }
+
+        private void ApplyLyreCue(LyreCue cue)
+        {
+            for (int i = 0; i < _lyreStates.Length; i++)
+            {
+                if (_lyreStates[i].lyreName != cue.lyreName) continue;
+
+                _lyreStates[i] = new LyreState
+                {
+                    lyreName = cue.lyreName,
+                    pan = cue.pan,
+                    tilt = cue.tilt,
+                    dimmer = cue.enabled ? cue.dimmer : 0f,
+                    color = cue.color,
+                    strobe = cue.strobe,
+                    gobo = 0
+                };
+                return;
+            }
+        }
+
+        private void ResetLyres()
+        {
+            if (_lyreStates == null) return;
+            for (int i = 0; i < _lyreStates.Length; i++)
+            {
+                var s = _lyreStates[i];
+                s.dimmer = 0;
+                s.strobe = 0;
+                s.color = new Color32(0, 0, 0, 255);
+                _lyreStates[i] = s;
+            }
         }
 
         private static Keyframe FindActiveKeyframe(List<Keyframe> keyframes, float time)
@@ -285,9 +352,20 @@ namespace Laps.Authoring
             _state       = new Color32[_ledCount];
             _layerBuffer = new Color32[_ledCount];
             int lyreCount = cfg.mapping.lyres?.Length ?? 0;
-            _lyreStates  = new LyreState[lyreCount];
+            _lyreStates = new LyreState[lyreCount];
             for (int i = 0; i < lyreCount; i++)
-                _lyreStates[i] = new LyreState { lyreName = cfg.mapping.lyres[i].name };
+            {
+                _lyreStates[i] = new LyreState
+                {
+                    lyreName = cfg.mapping.lyres[i].name,
+                    pan = 127,
+                    tilt = 127,
+                    dimmer = 0,
+                    color = new Color32(0, 0, 0, 255),
+                    strobe = 0,
+                    gobo = 0
+                };
+            }
             FillBlack();
         }
     }

@@ -38,6 +38,7 @@ namespace Laps.Routing
         // Key = (controllerIndex<<16) | (universe&0xFFFF), Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
         private readonly List<int> _universesToSend = new List<int>(256);
+        private readonly Dictionary<int, int> _controllerPatch = new Dictionary<int, int>(8);
 
         // Double buffer : le main thread écrit dans _writeBuffer, le thread routage lit _readBuffer
         private Color32[] _readBuffer;
@@ -243,10 +244,12 @@ namespace Laps.Routing
             {
                 foreach (var lyreState in lyres)
                 {
+                    if (lyreState == null) continue;
+
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    int lyreControllerIndex = FindControllerIndexByIp(lyreCfg.controllerIp, config);
+                    int lyreControllerIndex = RemapController(FindControllerIndexByIp(lyreCfg.controllerIp, config));
                     if (lyreControllerIndex < 0) continue;
 
                     int lyreKey = (lyreControllerIndex << 16) | (lyreCfg.universe & 0xFFFF);
@@ -256,44 +259,37 @@ namespace Laps.Routing
                         _dmxBuffers[lyreKey] = buf;
                     }
 
-                    int ch = lyreCfg.startChannel - 1; // DMX 1-based → 0-based
+                    int ch = lyreCfg.startChannel - 1;
+                    byte dim = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
+
                     if (lyreState.lyreName == "StaticProjector")
                     {
-                        // Projecteur statique (univers 33) : canaux 1..4 = R,G,B,W
+                        if (dim == 0) continue;
+
                         buf[ch + 0] = lyreState.color.r;
                         buf[ch + 1] = lyreState.color.g;
                         buf[ch + 2] = lyreState.color.b;
-                        buf[ch + 3] = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255); // dimmer utilisé comme W
+                        buf[ch + 3] = dim;
                     }
                     else
                     {
-                        // Moving head / lyre (mapping simplifié)
-                        buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan,    0, 255);
-                        buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt,   0, 255);
-                        byte dim = (byte)Mathf.Clamp(lyreState.dimmer, 0, 255);
+                        buf[ch + 0] = (byte)Mathf.Clamp(lyreState.pan, 0, 255);
+                        buf[ch + 1] = (byte)Mathf.Clamp(lyreState.tilt, 0, 255);
+                        if (dim == 0) continue;
+
                         byte stro = (byte)Mathf.Clamp(lyreState.strobe, 0, 255);
-                        byte gobo = (byte)Mathf.Clamp(lyreState.gobo,   0, 255);
+                        byte gobo = (byte)Mathf.Clamp(lyreState.gobo, 0, 255);
 
-                        // Les lyres RGBW 13ch varient beaucoup selon le modèle.
-                        // Pour éviter "rotation OK mais pas de lumière", on écrit dimmer/couleurs
-                        // sur plusieurs layouts courants (sans toucher au pan/tilt).
-                        WriteIfInRange(buf, ch + 2, dim);                 // layout A: dimmer
-                        WriteIfInRange(buf, ch + 5, dim);                 // layout B: dimmer
-
-                        // RGB (2 layouts fréquents)
-                        WriteIfInRange(buf, ch + 3, lyreState.color.r);   // layout A: R
-                        WriteIfInRange(buf, ch + 4, lyreState.color.g);   // layout A: G
-                        WriteIfInRange(buf, ch + 5, lyreState.color.b);   // layout A: B (peut écraser dimmer B, ok)
-
-                        WriteIfInRange(buf, ch + 7, lyreState.color.r);   // layout B: R
-                        WriteIfInRange(buf, ch + 8, lyreState.color.g);   // layout B: G
-                        WriteIfInRange(buf, ch + 9, lyreState.color.b);   // layout B: B
-
-                        // Strobe (2 layouts)
-                        WriteIfInRange(buf, ch + 6, stro);                // layout A: strobe
-                        WriteIfInRange(buf, ch + 10, stro);               // layout B: strobe
-
-                        // Gobo / misc
+                        WriteIfInRange(buf, ch + 2, dim);
+                        WriteIfInRange(buf, ch + 5, dim);
+                        WriteIfInRange(buf, ch + 3, lyreState.color.r);
+                        WriteIfInRange(buf, ch + 4, lyreState.color.g);
+                        WriteIfInRange(buf, ch + 5, lyreState.color.b);
+                        WriteIfInRange(buf, ch + 7, lyreState.color.r);
+                        WriteIfInRange(buf, ch + 8, lyreState.color.g);
+                        WriteIfInRange(buf, ch + 9, lyreState.color.b);
+                        WriteIfInRange(buf, ch + 6, stro);
+                        WriteIfInRange(buf, ch + 10, stro);
                         WriteIfInRange(buf, ch + 7, gobo);
                         WriteIfInRange(buf, ch + 11, gobo);
                     }
@@ -304,10 +300,7 @@ namespace Laps.Routing
 
             _universesToSend.Clear();
             foreach (var kvp in _dmxBuffers)
-            {
-                if (HasNonZeroData(kvp.Value))
-                    _universesToSend.Add(kvp.Key);
-            }
+                _universesToSend.Add(kvp.Key);
             _universesToSend.Sort();
 
             for (int i = 0; i < _universesToSend.Count; i++)
@@ -338,7 +331,8 @@ namespace Laps.Routing
                 ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
                 if (addr.controllerIndex < 0) continue;
 
-                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                int ctrl = RemapController(addr.controllerIndex);
+                int key = DmxBufferKey(ctrl, addr.universe);
                 if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                 {
                     buf = new byte[512];
@@ -366,7 +360,8 @@ namespace Laps.Routing
                 if (!ConfigManager.EntityMap.TryGet(e.id, out var addr)) continue;
                 if (addr.controllerIndex < 0) continue;
 
-                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                int ctrl = RemapController(addr.controllerIndex);
+                int key = DmxBufferKey(ctrl, addr.universe);
                 if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                 {
                     buf = new byte[512];
@@ -392,17 +387,6 @@ namespace Laps.Routing
             for (int i = 0; i < dmxData.Length; i++)
                 if (dmxData[i] != 0) return true;
             return false;
-        }
-
-        private static int FindControllerIndexByIp(AppConfig config, string ip)
-        {
-            if (config?.network?.controllers == null || string.IsNullOrEmpty(ip)) return -1;
-            for (int i = 0; i < config.network.controllers.Length; i++)
-            {
-                if (config.network.controllers[i].ip == ip)
-                    return i;
-            }
-            return -1;
         }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)
@@ -440,11 +424,36 @@ namespace Laps.Routing
             bool wasRunning = _running;
             if (wasRunning) StopRoutingThread();
 
+            LoadControllerPatch();
             _pixelMapping.Build(ConfigManager.Config);
             _dmxBuffers.Clear();
 
             if (wasRunning) StartRouting();
             Debug.Log("[RoutingEngine] Mapping reconstruit après rechargement de config.");
+        }
+
+        private void LoadControllerPatch()
+        {
+            _controllerPatch.Clear();
+            var entries = ConfigManager.Config?.router?.controllerPatch;
+            if (entries == null) return;
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                var e = entries[i];
+                if (e.toController < 0) continue;
+                _controllerPatch[e.fromController] = e.toController;
+            }
+
+            if (_controllerPatch.Count > 0)
+                Debug.Log($"[RoutingEngine] Patch map actif : {_controllerPatch.Count} reroutage(s) contrôleur.");
+        }
+
+        private int RemapController(int controllerIndex)
+        {
+            if (_controllerPatch.TryGetValue(controllerIndex, out int mapped))
+                return mapped;
+            return controllerIndex;
         }
     }
 }

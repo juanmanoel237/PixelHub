@@ -49,6 +49,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         _eHub = GetComponent<EHubNetworkBridge>() ?? gameObject.AddComponent<EHubNetworkBridge>();
         if (GetComponent<EHubControlPanel>() == null)
             gameObject.AddComponent<EHubControlPanel>();
+        if (GetComponent<RouterConfigPanel>() == null)
+            gameObject.AddComponent<RouterConfigPanel>();
 
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
@@ -114,6 +116,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
+        Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
     }
 
     private void Update()
@@ -138,6 +141,22 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestDebugColor(EHubDebugColor.Blue);
         else if (Input.GetKeyDown(KeyCode.Alpha0))
             RequestDebugColor(EHubDebugColor.BlackOut);
+        else if (Input.GetKeyDown(KeyCode.F1))
+            TestMovingHead(1);
+        else if (Input.GetKeyDown(KeyCode.F4))
+            TestMovingHead(4);
+        else if (Input.GetKeyDown(KeyCode.Alpha6))
+            TestMovingHead(1);
+        else if (Input.GetKeyDown(KeyCode.Alpha7))
+            TestMovingHead(2);
+        else if (Input.GetKeyDown(KeyCode.Alpha8))
+            TestMovingHead(3);
+        else if (Input.GetKeyDown(KeyCode.Alpha9))
+            TestMovingHead(4);
+        else if (Input.GetKeyDown(KeyCode.P))
+            TestStaticProjector();
+        else if (Input.GetKeyDown(KeyCode.F5))
+            BlackOutLyres();
     }
 
     /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
@@ -200,6 +219,24 @@ public class PixelHubBootstrapper : MonoBehaviour
                 break;
         }
         RefreshDisplay();
+    }
+
+    private void TestMovingHead(int headIndex)
+    {
+        _otherDevices?.TestMovingHead(headIndex);
+        SyncPreview(_debugPanel, $"Lyres — MovingHead{headIndex} ON");
+    }
+
+    private void TestStaticProjector()
+    {
+        _otherDevices?.TestStaticProjector();
+        SyncPreview(_debugPanel, "Lyres — StaticProjector ON");
+    }
+
+    private void BlackOutLyres()
+    {
+        _otherDevices?.BlackOutAllLyres();
+        SyncPreview(_debugPanel, "Lyres — OFF");
     }
 
     private void EnsureComponents()

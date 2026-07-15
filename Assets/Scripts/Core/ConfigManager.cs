@@ -45,6 +45,7 @@ namespace Laps.Core
         public string eHubSessionId;  // Code équipe — isole du reste de la classe
         public string[] eHubPeers;    // IPs des autres postes de VOTRE équipe (unicast)
         public int artNetPort;        // Port ArtNet standard = 6454
+        public int ehubProtocolPort;  // Port UDP protocole eHuB externe (LED entités), distinct du sync équipe
     }
 
     [Serializable]
@@ -156,6 +157,38 @@ namespace Laps.Core
             OnConfigReloaded?.Invoke();
         }
 
+        /// <summary>
+        /// Met à jour toutes les IP contrôleurs, sauvegarde une fois et notifie le routeur (P1 UI).
+        /// </summary>
+        public bool SetAllControllerIps(string[] ips)
+        {
+            if (Config?.network?.controllers == null || ips == null)
+                return false;
+
+            int n = Config.network.controllers.Length;
+            if (ips.Length < n)
+            {
+                Debug.LogWarning("[ConfigManager] Tableau IP trop court.");
+                return false;
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                string ip = ips[i]?.Trim();
+                if (string.IsNullOrEmpty(ip))
+                {
+                    Debug.LogWarning($"[ConfigManager] IP vide pour contrôleur {i}.");
+                    return false;
+                }
+                Config.network.controllers[i].ip = ip;
+            }
+
+            SaveConfig();
+            Debug.Log("[ConfigManager] IPs contrôleurs mises à jour.");
+            OnConfigReloaded?.Invoke();
+            return true;
+        }
+
         private void LoadEntityMapping()
         {
             EntityMappingCsvPath = null;
@@ -196,7 +229,8 @@ namespace Laps.Core
                     eHubPort = 9000,
                     eHubSessionId = "mon-equipe",
                     eHubPeers = new string[0],
-                    artNetPort = 6454
+                    artNetPort = 6454,
+                    ehubProtocolPort = 9001
                 },
                 mapping = new MappingConfig
                 {
