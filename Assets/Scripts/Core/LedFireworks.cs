@@ -8,7 +8,9 @@ namespace Laps.Core
         ClassicNova,
         SparkleFountain,
         FlameThrowerLeft,
-        FlameThrowerRight
+        FlameThrowerRight,
+        LaserSweep,
+        Shockwave
     }
 
     /// <summary>
@@ -52,6 +54,8 @@ namespace Laps.Core
             Color baseColor = Color.white;
             bool isMulticolor = forceMulticolor;
             bool isFlame = (style == FireworkStyle.FlameThrowerLeft || style == FireworkStyle.FlameThrowerRight);
+            bool isLaser = (style == FireworkStyle.LaserSweep);
+            bool isShockwave = (style == FireworkStyle.Shockwave);
 
             if (isFlame)
             {
@@ -66,13 +70,23 @@ namespace Laps.Core
                     cy = 0.98f;
                 }
             }
+            else if (isLaser)
+            {
+                cx = 0.01f;
+                cy = 0.5f;
+            }
+            else if (isShockwave)
+            {
+                cx = 0.5f;
+                cy = 0.5f;
+            }
             else
             {
                 cx = Random.Range(0.22f, 0.78f);
                 cy = Random.Range(0.22f, 0.78f);
             }
 
-            if (!isFlame)
+            if (!isFlame && !isLaser && !isShockwave)
             {
                 if (customColor.HasValue)
                 {
@@ -98,8 +112,26 @@ namespace Laps.Core
                 count = 100;
             else if (isFlame)
                 count = 70; // Particules pour la flamme
+            else if (isLaser)
+                count = 85; // Résolution verticale de la ligne de laser
+            else if (isShockwave)
+                count = 100; // Densité du cercle
 
             var particles = new List<Particle>(count);
+
+            // Choisir une couleur de laser spécifique si c'est un laser
+            Color laserColor = Color.green;
+            if (isLaser)
+            {
+                Color[] laserColors = new Color[]
+                {
+                    new Color(0.1f, 1f, 0.2f),   // Vert fluo
+                    new Color(0f, 0.95f, 1f),    // Cyan laser
+                    new Color(1f, 0.05f, 0.85f), // Magenta vif
+                    new Color(1f, 0.95f, 0f)     // Jaune laser
+                };
+                laserColor = laserColors[Random.Range(0, laserColors.Length)];
+            }
 
             for (int i = 0; i < count; i++)
             {
@@ -108,6 +140,9 @@ namespace Laps.Core
                 float vy = 0f;
                 float gravityVal = 0.55f;
                 float lifetime = Random.Range(0.7f, 1.6f);
+                float px = cx;
+                float py = cy;
+                Color pColor = baseColor;
 
                 if (isFlame)
                 {
@@ -121,30 +156,55 @@ namespace Laps.Core
                     gravityVal = -0.65f; // Flottabilité de la flamme (gravité négative pour qu'elle monte)
                     lifetime = Random.Range(0.5f, 0.9f); // Plus courte vie
                 }
+                else if (isLaser)
+                {
+                    // Ligne verticale balayant l'écran horizontalement
+                    float yNorm = (float)i / (count - 1);
+                    px = 0.01f;
+                    py = yNorm;
+                    vx = 1.35f; // Vitesse de balayage rapide de gauche à droite
+                    vy = 0f;
+                    gravityVal = 0f;
+                    lifetime = 0.75f; // Finit un peu après avoir traversé la grille (0.75 * 1.35 = 1.01)
+                    pColor = laserColor;
+                }
+                else if (isShockwave)
+                {
+                    // Onde de choc circulaire
+                    float angle = (i * Mathf.PI * 2f) / count;
+                    float shockwaveSpeed = 0.9f;
+                    vx = Mathf.Cos(angle) * shockwaveSpeed;
+                    vy = Mathf.Sin(angle) * shockwaveSpeed;
+                    gravityVal = 0f;
+                    lifetime = 0.6f; // S'estompe quand elle atteint les bords
+                    
+                    // Couleur néon cyan qui tire vers le bleu électrique
+                    pColor = Color.Lerp(new Color(0.1f, 0.7f, 1f), new Color(0f, 0.2f, 1f), Random.value);
+                }
                 else if (style == FireworkStyle.SparkleFountain)
                 {
                     float angle = Random.Range(-35f, 35f) * Mathf.Deg2Rad;
                     vx = Mathf.Sin(angle) * speed * 0.5f;
                     vy = -Mathf.Cos(angle) * speed;
+                    pColor = isMulticolor ? Palette[Random.Range(0, Palette.Length)] : baseColor;
                 }
                 else
                 {
                     float angle = Random.Range(0f, Mathf.PI * 2f);
                     vx = Mathf.Cos(angle) * speed;
                     vy = Mathf.Sin(angle) * speed;
+                    pColor = isMulticolor ? Palette[Random.Range(0, Palette.Length)] : baseColor;
                 }
-
-                Color pColor = isMulticolor ? Palette[Random.Range(0, Palette.Length)] : baseColor;
 
                 particles.Add(new Particle
                 {
-                    X = cx,
-                    Y = cy,
+                    X = px,
+                    Y = py,
                     Vx = vx,
                     Vy = vy,
                     Age = 0f,
                     Lifetime = lifetime,
-                    Color = (Color32)Color.Lerp(pColor, Color.white, Random.Range(0f, 0.45f)),
+                    Color = (Color32)Color.Lerp(pColor, Color.white, isLaser || isShockwave ? Random.Range(0f, 0.15f) : Random.Range(0f, 0.45f)), // Moins de blanc pour les effets purs
                     Gravity = gravityVal,
                     IsFlame = isFlame
                 });

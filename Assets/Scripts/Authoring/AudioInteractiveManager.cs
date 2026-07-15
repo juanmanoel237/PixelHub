@@ -79,7 +79,7 @@ namespace Laps.Authoring
         /// <summary>Déclenche un effet (son + VFX). Appelé localement ou depuis eHub.</summary>
         public void TriggerEffect(int mappingIndex, bool fromNetwork = false)
         {
-            // Cas particuliers pour les lance-flammes rapides (sans prefab/SFX obligatoires)
+            // Cas particuliers pour les lance-flammes et autres effets rapides (sans prefab/SFX obligatoires)
             if (mappingIndex == -99)
             {
                 LedFireworks.Trigger(FireworkStyle.FlameThrowerLeft);
@@ -102,6 +102,32 @@ namespace Laps.Authoring
                     {
                         type = EHubMessageTypes.SfxTrigger,
                         intArg = -98
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -97)
+            {
+                LedFireworks.Trigger(FireworkStyle.LaserSweep);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -97
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -96)
+            {
+                LedFireworks.Trigger(FireworkStyle.Shockwave);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -96
                     });
                 }
                 return;
@@ -163,16 +189,28 @@ namespace Laps.Authoring
             {
                 TriggerEffect(-98, fromNetwork: false);
             }
+
+            // Raccourcis clavier directs pour tester le balayage laser (L)
+            if (Input.GetKeyDown(KeyCode.L))
+            {
+                TriggerEffect(-97, fromNetwork: false);
+            }
+
+            // Raccourcis clavier directs pour tester l'onde de choc (S)
+            if (Input.GetKeyDown(KeyCode.S))
+            {
+                TriggerEffect(-96, fromNetwork: false);
+            }
         }
 
         private void HandleVolumeControl()
         {
-            if (Input.GetKeyDown(KeyCode.PageUp))
+            if (Input.GetKeyDown(KeyCode.UpArrow))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume + volumeStep);
                 Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
-            else if (Input.GetKeyDown(KeyCode.PageDown))
+            else if (Input.GetKeyDown(KeyCode.DownArrow))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume - volumeStep);
                 Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
