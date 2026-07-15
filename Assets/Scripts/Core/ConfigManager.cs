@@ -45,6 +45,7 @@ namespace Laps.Core
         public string eHubSessionId;  // Code équipe — isole du reste de la classe
         public string[] eHubPeers;    // IPs des autres postes de VOTRE équipe (unicast)
         public int artNetPort;        // Port ArtNet standard = 6454
+        public int ehubProtocolPort;  // Port UDP protocole eHuB externe (LED entités), distinct du sync équipe
     }
 
     [Serializable]
@@ -228,7 +229,8 @@ namespace Laps.Core
                     eHubPort = 9000,
                     eHubSessionId = "mon-equipe",
                     eHubPeers = new string[0],
-                    artNetPort = 6454
+                    artNetPort = 6454,
+                    ehubProtocolPort = 9001
                 },
                 mapping = new MappingConfig
                 {

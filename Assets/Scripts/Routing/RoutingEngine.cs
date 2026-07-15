@@ -38,6 +38,7 @@ namespace Laps.Routing
         // Key = (controllerIndex<<16) | (universe&0xFFFF), Value = tableau de 512 octets
         private Dictionary<int, byte[]> _dmxBuffers = new Dictionary<int, byte[]>();
         private readonly List<int> _universesToSend = new List<int>(256);
+        private readonly Dictionary<int, int> _controllerPatch = new Dictionary<int, int>(8);
 
         // Double buffer : le main thread écrit dans _writeBuffer, le thread routage lit _readBuffer
         private Color32[] _readBuffer;
@@ -248,7 +249,7 @@ namespace Laps.Routing
                     LyreConfig lyreCfg = FindLyreConfig(lyreState.lyreName, config);
                     if (lyreCfg == null) continue;
 
-                    int lyreControllerIndex = FindControllerIndexByIp(lyreCfg.controllerIp, config);
+                    int lyreControllerIndex = RemapController(FindControllerIndexByIp(lyreCfg.controllerIp, config));
                     if (lyreControllerIndex < 0) continue;
 
                     int lyreKey = (lyreControllerIndex << 16) | (lyreCfg.universe & 0xFFFF);
@@ -330,7 +331,8 @@ namespace Laps.Routing
                 ref LEDAddress addr = ref _pixelMapping.PixelMap[i];
                 if (addr.controllerIndex < 0) continue;
 
-                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                int ctrl = RemapController(addr.controllerIndex);
+                int key = DmxBufferKey(ctrl, addr.universe);
                 if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                 {
                     buf = new byte[512];
@@ -358,7 +360,8 @@ namespace Laps.Routing
                 if (!ConfigManager.EntityMap.TryGet(e.id, out var addr)) continue;
                 if (addr.controllerIndex < 0) continue;
 
-                int key = DmxBufferKey(addr.controllerIndex, addr.universe);
+                int ctrl = RemapController(addr.controllerIndex);
+                int key = DmxBufferKey(ctrl, addr.universe);
                 if (!_dmxBuffers.TryGetValue(key, out byte[] buf))
                 {
                     buf = new byte[512];
@@ -421,11 +424,36 @@ namespace Laps.Routing
             bool wasRunning = _running;
             if (wasRunning) StopRoutingThread();
 
+            LoadControllerPatch();
             _pixelMapping.Build(ConfigManager.Config);
             _dmxBuffers.Clear();
 
             if (wasRunning) StartRouting();
             Debug.Log("[RoutingEngine] Mapping reconstruit après rechargement de config.");
+        }
+
+        private void LoadControllerPatch()
+        {
+            _controllerPatch.Clear();
+            var entries = ConfigManager.Config?.router?.controllerPatch;
+            if (entries == null) return;
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                var e = entries[i];
+                if (e.toController < 0) continue;
+                _controllerPatch[e.fromController] = e.toController;
+            }
+
+            if (_controllerPatch.Count > 0)
+                Debug.Log($"[RoutingEngine] Patch map actif : {_controllerPatch.Count} reroutage(s) contrôleur.");
+        }
+
+        private int RemapController(int controllerIndex)
+        {
+            if (_controllerPatch.TryGetValue(controllerIndex, out int mapped))
+                return mapped;
+            return controllerIndex;
         }
     }
 }

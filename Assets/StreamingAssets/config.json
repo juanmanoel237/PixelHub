@@ -26,7 +26,8 @@
     "eHubPort": 9000,
     "eHubSessionId": "equipe-pixelhub",
     "eHubPeers": [],
-    "artNetPort": 6454
+    "artNetPort": 6454,
+    "ehubProtocolPort": 9001
   },
   "mapping": {
     "layout": "LapsWall128",
@@ -73,6 +74,7 @@
   "router": {
     "files": {
       "entityMappingCsv": "mapping/led_wall_mapping.csv"
-    }
+    },
+    "controllerPatch": []
   }
 }

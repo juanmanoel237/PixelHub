@@ -93,8 +93,15 @@ public class RouterConfigPanel : MonoBehaviour
             $"Mapping CSV : {ConfigManager.EntityMap?.Count ?? 0} entités");
         y += 18;
         GUI.Label(new Rect(x, y, w, 18),
-            $"Lyres : {cfg.mapping.lyres?.Length ?? 0} | Art-Net : {cfg.network.artNetPort}");
+            $"Lyres : {cfg.mapping.lyres?.Length ?? 0} | Art-Net : {cfg.network.artNetPort} | eHuB : {cfg.network.ehubProtocolPort}");
         y += 18;
+
+        int patchCount = cfg.router?.controllerPatch?.Length ?? 0;
+        if (patchCount > 0)
+        {
+            GUI.Label(new Rect(x, y, w, 18), $"Patch map : {patchCount} reroutage(s) actif(s)");
+            y += 18;
+        }
     }
 
     private void DrawIpFields(float x, ref float y, float w)

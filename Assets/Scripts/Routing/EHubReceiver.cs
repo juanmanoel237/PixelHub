@@ -39,6 +39,12 @@ namespace Laps.Routing
         // Ranges décrits par le message config (si update ne contient pas les IDs)
         private readonly List<RangeMap> _ranges = new List<RangeMap>(64);
 
+        private int _updatesReceived;
+        private int _lastEntityCount;
+
+        public int UpdatesReceived => _updatesReceived;
+        public int LastEntityCount => _lastEntityCount;
+
         private static readonly Color32[] EmptyPixels = Array.Empty<Color32>();
         private static readonly LyreState[] EmptyLyres = Array.Empty<LyreState>();
 
@@ -74,7 +80,10 @@ namespace Laps.Routing
 
         private void StartListener()
         {
-            int port = _listenPortOverride > 0 ? _listenPortOverride : (ConfigManager.Config?.network?.eHubPort ?? 9000);
+            int port = _listenPortOverride > 0
+                ? _listenPortOverride
+                : (ConfigManager.Config?.network?.ehubProtocolPort ?? 9001);
+            if (port <= 0) port = 9001;
 
             try
             {
@@ -245,6 +254,9 @@ namespace Laps.Routing
             // Optionnel: utiliser declaredCount si différent; on garde payload comme source de vérité.
             lock (_lock)
                 _latestEntities = entities;
+
+            Interlocked.Increment(ref _updatesReceived);
+            Interlocked.Exchange(ref _lastEntityCount, entities.Length);
         }
 
         private static int ResolveEntityId(int tupleIndex, List<RangeMap> ranges)

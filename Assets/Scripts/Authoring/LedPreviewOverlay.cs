@@ -162,6 +162,14 @@ namespace Laps.Authoring
                 y += 18;
             }
 
+            if (_provider is EHubReceiver ehubRx)
+            {
+                int port = ConfigManager.Config?.network?.ehubProtocolPort ?? 9001;
+                GUI.Label(new Rect(margin + 8, y, 264, 18),
+                    $"eHuB protocole : port {port} — {ehubRx.UpdatesReceived} RX, {ehubRx.LastEntityCount} entités");
+                y += 18;
+            }
+
             if (EHubStatus.Enabled)
             {
                 if (EHubStatus.Connected)
