@@ -14,6 +14,7 @@ namespace Laps.Authoring
         private RenderTexture _videoRT;
         private Material _lumaKeyMat;
         private bool _videoReady;
+        private bool _paused;
 
         /// <summary>La RenderTexture de la vidéo, null tant qu'elle n'est pas prête.</summary>
         public RenderTexture VideoTexture => _videoReady ? _videoRT : null;
@@ -23,7 +24,6 @@ namespace Laps.Authoring
 
         private void Awake()
         {
-            // Charger le shader luma-key depuis Resources
             var shader = Shader.Find("Hidden/VideoLumaKey");
             if (shader != null)
             {
@@ -43,6 +43,23 @@ namespace Laps.Authoring
         {
             CleanupVideo();
             if (_lumaKeyMat != null) Destroy(_lumaKeyMat);
+        }
+
+        /// <summary>Pause / reprise synchronisée avec Espace (et eHub).</summary>
+        public void SetPaused(bool paused)
+        {
+            _paused = paused;
+            if (_videoPlayer == null || !_videoReady) return;
+
+            if (paused)
+            {
+                if (_videoPlayer.isPlaying)
+                    _videoPlayer.Pause();
+            }
+            else if (!_videoPlayer.isPlaying)
+            {
+                _videoPlayer.Play();
+            }
         }
 
         private void InitVideoPlayer()
@@ -73,7 +90,8 @@ namespace Laps.Authoring
             _videoRT.Create();
 
             vp.targetTexture = _videoRT;
-            vp.Play();
+            if (!_paused)
+                vp.Play();
             _videoReady = true;
             Debug.Log($"[VideoOverlayRenderer] Vidéo prête ({w}×{h}), lecture en boucle avec luma-key.");
         }

@@ -697,7 +697,7 @@ MonoBehaviour:
   _debugPanel: {fileID: 0}
   _audioReactive: {fileID: 0}
   _videoCapture: {fileID: 0}
-  _startMode: 4
+  _startMode: 0
 --- !u!1001 &6829352580376196397
 PrefabInstance:
   m_ObjectHideFlags: 0

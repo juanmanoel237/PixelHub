@@ -30,7 +30,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     private LedPreviewOverlay _previewOverlay;
 
     [Header("Mode de démarrage")]
-    [SerializeField] private StartMode _startMode = StartMode.VideoCapture;
+    [SerializeField] private StartMode _startMode = StartMode.Timeline;
 
     private StartMode _currentMode;
 
@@ -302,6 +302,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             var src = director.GetComponent<AudioSource>();
             if (src != null)
                 _audioReactive.SetAudioSource(src);
+            // Une seule source : la Timeline pilote l'AudioSource (pas de src.Play() en plus).
             if (director.state != PlayState.Playing)
                 director.Play();
         }

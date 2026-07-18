@@ -21,8 +21,9 @@ namespace Laps.Authoring
         private float _bassPeak;
         private float _highPeak;
 
-        // Référence au renderer vidéo (combat_fond_noir.mp4)
+        // Stickmen toujours visibles dans l'aperçu LED (luma-key).
         private VideoOverlayRenderer _videoOverlay;
+        private bool _showCombatOverlay = true;
 
         public void Init(RoutingEngine routing)
         {
@@ -225,44 +226,42 @@ namespace Laps.Authoring
                 GUI.Box(new Rect(x - 4, margin - 4, previewW + 8, previewH + 28), "Aperçu LEDs (simulation)");
                 GUI.DrawTexture(new Rect(x, margin + 18, previewW, previewH), _previewTexture, ScaleMode.ScaleToFit);
 
-                // ── Vidéo combat au premier plan, en bas du cadre Aperçu LEDs ──
-                // Utilise un shader luma-key pour rendre le fond noir transparent
-                if (_videoOverlay == null)
-                    _videoOverlay = FindObjectOfType<VideoOverlayRenderer>();
-
-                var videoTex = _videoOverlay != null ? _videoOverlay.VideoTexture : null;
-                var lumaMat  = _videoOverlay != null ? _videoOverlay.LumaKeyMaterial : null;
-                if (videoTex != null)
+                // Vidéo combat (stickmen) par-dessus les LEDs (luma-key).
+                if (_showCombatOverlay)
                 {
-                    float previewX = x;
-                    float previewY = margin + 18;
+                    if (_videoOverlay == null)
+                        _videoOverlay = FindObjectOfType<VideoOverlayRenderer>();
 
-                    float videoAspect = (float)videoTex.width / videoTex.height;
-                    // La vidéo occupe toute la largeur du cadre, ratio préservé
-                    float vidW = previewW;
-                    float vidH = vidW / videoAspect;
-                    // Collée en bas du cadre preview
-                    float vidX = previewX;
-                    float vidY = previewY + previewH - vidH;
-
-                    var vidRect = new Rect(vidX, vidY, vidW, vidH);
-
-                    if (lumaMat != null)
+                    var videoTex = _videoOverlay != null ? _videoOverlay.VideoTexture : null;
+                    var lumaMat  = _videoOverlay != null ? _videoOverlay.LumaKeyMaterial : null;
+                    if (videoTex != null)
                     {
-                        // Graphics.DrawTexture avec le matériau luma-key
-                        // → fond noir = transparent, stickmen visibles par-dessus les LEDs
-                        Graphics.DrawTexture(vidRect, videoTex, lumaMat);
-                    }
-                    else
-                    {
-                        // Fallback sans shader
-                        GUI.DrawTexture(vidRect, videoTex, ScaleMode.ScaleToFit);
+                        float previewX = x;
+                        float previewY = margin + 18;
+
+                        float videoAspect = (float)videoTex.width / Mathf.Max(1, videoTex.height);
+                        float vidW = previewW;
+                        float vidH = vidW / videoAspect;
+                        if (vidH > previewH)
+                        {
+                            vidH = previewH;
+                            vidW = vidH * videoAspect;
+                        }
+                        float vidX = previewX + (previewW - vidW) * 0.5f;
+                        float vidY = previewY + previewH - vidH;
+
+                        var vidRect = new Rect(vidX, vidY, vidW, vidH);
+
+                        if (lumaMat != null)
+                            Graphics.DrawTexture(vidRect, videoTex, lumaMat);
+                        else
+                            GUI.DrawTexture(vidRect, videoTex, ScaleMode.ScaleToFit);
                     }
                 }
             }
 
-            GUI.Label(new Rect(margin, Screen.height - 44, Screen.width - margin * 2, 40),
-                "GAME (pas Scene). Mur : R/G/B/0/1 | Lyres : F1/F4/6-9/P/F5 | F6=config IP | T/E/A/V=modes | eHub : panneau bas");
+            GUI.Label(new Rect(margin, Screen.height - 22, Screen.width - margin * 2, 20),
+                "Mur:R/G/B/0/1 | Lyres:F1–F4 F2=panneau F3=beat | F6=IP | T/E/A/V | Espace=pause | eHub bas-gauche");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)

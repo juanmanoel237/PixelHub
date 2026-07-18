@@ -228,6 +228,7 @@ namespace Laps.Authoring
         {
             if (_isPaused == paused) return;
             _isPaused = paused;
+            GlobalPause.SetPaused(paused);
 
             if (paused)
             {
@@ -241,7 +242,10 @@ namespace Laps.Authoring
                         _director.Pause();
                 }
 
-                Debug.Log("[Pause] Tout en pause");
+                var video = FindObjectOfType<VideoOverlayRenderer>();
+                video?.SetPaused(true);
+
+                Debug.Log("[Pause] Tout en pause (audio + timeline + stickmen)");
             }
             else
             {
@@ -250,6 +254,9 @@ namespace Laps.Authoring
 
                 if (_director != null && _directorWasPlaying)
                     _director.Resume();
+
+                var video = FindObjectOfType<VideoOverlayRenderer>();
+                video?.SetPaused(false);
 
                 Debug.Log("[Pause] Lecture reprise");
             }
