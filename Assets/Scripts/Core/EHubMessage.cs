@@ -25,6 +25,7 @@ namespace Laps.Core
         public const string DebugColor  = "DebugColor";
         public const string SfxTrigger  = "SfxTrigger";
         public const string PauseState  = "PauseState";
+        public const string DanmarkLetter = "DanmarkLetter";
     }
 
     /// <summary>Codes pour DebugColor.intArg</summary>

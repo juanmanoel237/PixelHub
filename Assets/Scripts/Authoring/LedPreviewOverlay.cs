@@ -96,6 +96,7 @@ namespace Laps.Authoring
                 var copy = new Color32[len];
                 System.Array.Copy(state, copy, len);
                 LedFireworks.CompositeOnto(copy, _screenWidth, _screenHeight);
+                LedTextOverlay.CompositeOnto(copy, _screenWidth, _screenHeight);
                 state = copy;
             }
 

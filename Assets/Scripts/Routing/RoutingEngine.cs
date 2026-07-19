@@ -138,6 +138,7 @@ namespace Laps.Routing
             if (_stateProvider == null) return;
 
             LedFireworks.Tick(Time.deltaTime);
+            LedTextOverlay.Tick(Time.deltaTime);
 
             Color32[] state = _stateProvider.GetState();
             LyreState[] lyres = _stateProvider.GetLyreStates();
@@ -158,6 +159,10 @@ namespace Laps.Routing
                     if (map != null)
                     {
                         LedFireworks.CompositeOnto(
+                            _writeBuffer,
+                            map.screenWidth > 0 ? map.screenWidth : 128,
+                            map.screenHeight > 0 ? map.screenHeight : 128);
+                        LedTextOverlay.CompositeOnto(
                             _writeBuffer,
                             map.screenWidth > 0 ? map.screenWidth : 128,
                             map.screenHeight > 0 ? map.screenHeight : 128);
