@@ -197,7 +197,7 @@ public class EHubControlPanel : MonoBehaviour
             "N'importe qui peut être HÔTE ou CLIENT.\n" +
             "1) L'hôte clique « Je suis l'hôte » et lit son IP\n" +
             "2) Les autres entrent cette IP (ou bouton auto)\n" +
-            "3) Autorisez Unity en « réseau privé » si Windows demande");
+            "3) L'hôte ET le client autorisent Unity (pare-feu privé)");
         y += 66;
     }
 

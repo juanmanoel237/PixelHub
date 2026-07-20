@@ -69,7 +69,8 @@ public class EHubNetworkBridge : MonoBehaviour
         var net = ConfigManager.Config?.network;
         if (net == null) return;
 
-        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        if (_transport == null || !_transport.IsListening)
+            ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
         _transport.StartAsHost();
         EHubStatus.HostDetectedOnLan = false;
         _transport.SendHostBeacon();
@@ -99,7 +100,8 @@ public class EHubNetworkBridge : MonoBehaviour
         PlayerPrefs.SetString("eHub.lastHostIp", hostIp);
         PlayerPrefs.Save();
 
-        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        if (_transport == null || !_transport.IsListening)
+            ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
         _transport.ConnectToHost(hostIp);
     }
 

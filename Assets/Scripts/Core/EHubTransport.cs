@@ -60,6 +60,7 @@ namespace Laps.Core
         public int Port => _port;
         public bool IsConnected => _role == EHubRole.Host || (_role == EHubRole.Client && IsClientLinked());
         public bool IsClientConnecting => _role == EHubRole.Client && _clientLinkState == EHubClientLinkState.Connecting;
+        public bool IsListening => _running;
         public bool IsSoloMode => _role == EHubRole.Solo;
         public int MessagesReceived { get; private set; }
         public int MessagesSent { get; private set; }
@@ -93,7 +94,7 @@ namespace Laps.Core
             _hostIp = null;
             _clientLinkState = EHubClientLinkState.None;
             _lastConnectionError = "";
-            StartListener();
+            EnsureListener();
             Debug.Log($"[eHub] Mode HÔTE — session « {_sessionId} » port {_port}. Votre IP : {_localIp}");
         }
 
@@ -116,7 +117,7 @@ namespace Laps.Core
             _clientLinkState = EHubClientLinkState.Connecting;
             _lastConnectionError = "";
             _connectStartedMs = NowMs();
-            StartListener();
+            EnsureListener();
             if (!_running)
             {
                 _clientLinkState = EHubClientLinkState.Failed;
@@ -131,6 +132,12 @@ namespace Laps.Core
         public void StartDiscoveryListen()
         {
             if (_role != EHubRole.Solo || _running) return;
+            EnsureListener();
+        }
+
+        private void EnsureListener()
+        {
+            if (_running) return;
             StartListener();
         }
 
@@ -141,8 +148,8 @@ namespace Laps.Core
 
             _clientLinkState = EHubClientLinkState.Failed;
             _lastConnectionError =
-                $"Pas de réponse de l'hôte {_hostIp}. Vérifiez l'IP, le même Wi-Fi, " +
-                "et autorisez Unity en réseau privé (UDP port " + _port + ").";
+                $"Pas de réponse de l'hôte {_hostIp}. L'hôte doit aussi autoriser Unity " +
+                $"(pare-feu UDP {_port}). Même Wi-Fi requis.";
             ClientLinkFailed?.Invoke(_lastConnectionError);
             Debug.LogWarning($"[eHub] {_lastConnectionError}");
         }
@@ -153,7 +160,10 @@ namespace Laps.Core
 
             try
             {
-                _listener = new UdpClient(_port);
+                var endpoint = new IPEndPoint(IPAddress.Any, _port);
+                _listener = new UdpClient();
+                _listener.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                _listener.Client.Bind(endpoint);
                 _listener.Client.ReceiveBufferSize = 65536;
                 _listener.EnableBroadcast = true;
             }
@@ -164,16 +174,22 @@ namespace Laps.Core
                 return;
             }
 
-            _sender = new UdpClient();
-            _sender.EnableBroadcast = true;
+            if (_sender == null)
+            {
+                _sender = new UdpClient();
+                _sender.EnableBroadcast = true;
+            }
 
             _running = true;
-            _thread = new Thread(ReceiveLoop)
+            if (_thread == null || !_thread.IsAlive)
             {
-                IsBackground = true,
-                Name = "PixelHub-eHub"
-            };
-            _thread.Start();
+                _thread = new Thread(ReceiveLoop)
+                {
+                    IsBackground = true,
+                    Name = "PixelHub-eHub"
+                };
+                _thread.Start();
+            }
         }
 
         private void ReceiveLoop()
@@ -215,6 +231,14 @@ namespace Laps.Core
                         continue;
                     }
 
+                    if (_role == EHubRole.Client &&
+                        _clientLinkState == EHubClientLinkState.Connecting &&
+                        IsFromTargetHost(remoteIp) &&
+                        msg.type != EHubMessageTypes.HostBeacon)
+                    {
+                        HandleHelloAck(remoteIp);
+                    }
+
                     if (!SessionMatches(msg)) continue;
 
                     _peers.Note(msg.senderId, remoteIp);
@@ -242,6 +266,15 @@ namespace Laps.Core
         {
             if (string.IsNullOrEmpty(msg.sessionId)) return true;
             return string.Equals(msg.sessionId, _sessionId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsFromTargetHost(string remoteIp)
+        {
+            if (EHubNetworkUtil.IpEquals(remoteIp, _hostIp)) return true;
+            if (!string.IsNullOrEmpty(DiscoveredHostIp) &&
+                EHubNetworkUtil.IpEquals(remoteIp, DiscoveredHostIp))
+                return true;
+            return false;
         }
 
         private void HandleHelloAck(string remoteIp)
@@ -340,14 +373,22 @@ namespace Laps.Core
                 Debug.Log($"[eHub] Client {remoteIp} (déclaré {msg.stringArg})");
             }
 
-            SendToIp(new EHubMessage
-            {
-                type = EHubMessageTypes.HelloAck,
-                intArg = 1 + CountActiveClients()
-            }, clientIp);
+            SendHelloAckTo(clientIp, 1 + CountActiveClients());
 
             if (isNewClient)
                 ClientJoined?.Invoke(clientIp);
+        }
+
+        private void SendHelloAckTo(string clientIp, int posteCount)
+        {
+            var ack = new EHubMessage
+            {
+                type = EHubMessageTypes.HelloAck,
+                intArg = posteCount
+            };
+
+            for (int i = 0; i < 3; i++)
+                SendToIp(ack, clientIp);
         }
 
         private void RelayToClients(EHubMessage msg, string exceptIp)
@@ -398,11 +439,42 @@ namespace Laps.Core
         {
             if (_role != EHubRole.Client || string.IsNullOrEmpty(_hostIp)) return;
 
-            SendToIp(new EHubMessage
+            var msg = new EHubMessage
             {
                 type = EHubMessageTypes.Hello,
                 stringArg = _localIp
-            }, _hostIp);
+            };
+
+            // Unicast direct + broadcast (certains Wi-Fi bloquent le trafic direct entre clients)
+            SendToIp(msg, _hostIp);
+            BroadcastPacket(msg);
+        }
+
+        private void BroadcastPacket(EHubMessage msg)
+        {
+            if (_sender == null) return;
+
+            msg.sessionId = _sessionId;
+            msg.senderId = _clientId;
+            byte[] data = Encoding.UTF8.GetBytes(JsonUtility.ToJson(msg));
+
+            try
+            {
+                _sender.Send(data, data.Length, new IPEndPoint(IPAddress.Broadcast, _port));
+            }
+            catch { /* ignore */ }
+
+            foreach (string ip in EHubNetworkUtil.CollectLanCandidates())
+            {
+                try
+                {
+                    int dot = ip.LastIndexOf('.');
+                    if (dot < 0) continue;
+                    string subnet = ip.Substring(0, dot + 1) + "255";
+                    _sender.Send(data, data.Length, new IPEndPoint(IPAddress.Parse(subnet), _port));
+                }
+                catch { /* ignore */ }
+            }
         }
 
         public void SendToPeer(EHubMessage msg, string ip)
