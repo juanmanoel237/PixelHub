@@ -55,6 +55,12 @@ namespace Laps.Core
         public string ActivePeersLabel => _role == EHubRole.Host ? FormatClientList() : (_role == EHubRole.Client ? $"hôte {_hostIp}" : "—");
         public string PeersConfigLabel => _role == EHubRole.Host ? $"{ConnectedClientCount} client(s)" : HostIp;
 
+        /// <summary>Déclenché côté hôte quand un client envoie Hello.</summary>
+        public event Action<string> ClientJoined;
+
+        /// <summary>Déclenché côté client quand l'hôte répond HelloAck.</summary>
+        public event Action ClientLinked;
+
         public EHubTransport(int port, string sessionId)
         {
             _port = port > 0 ? port : 9000;
@@ -129,7 +135,10 @@ namespace Laps.Core
 
                     if (msg.type == EHubMessageTypes.HelloAck)
                     {
+                        bool wasLinked = IsClientLinked();
                         _lastHostContactMs = NowMs();
+                        if (_role == EHubRole.Client && !wasLinked)
+                            ClientLinked?.Invoke();
                         continue;
                     }
 
@@ -159,6 +168,8 @@ namespace Laps.Core
             if (_role != EHubRole.Host) return;
 
             string clientIp = string.IsNullOrEmpty(msg.stringArg) ? remoteIp : msg.stringArg.Trim();
+            bool isNewClient = !_connectedClients.TryGetValue(clientIp, out long lastSeen) ||
+                               NowMs() - lastSeen >= 8000;
             _connectedClients[clientIp] = NowMs();
             _peers.Note(msg.senderId, clientIp);
 
@@ -167,6 +178,9 @@ namespace Laps.Core
                 type = EHubMessageTypes.HelloAck,
                 intArg = 1 + CountActiveClients()
             }, clientIp);
+
+            if (isNewClient)
+                ClientJoined?.Invoke(clientIp);
         }
 
         private void RelayToClients(EHubMessage msg, string exceptIp)
@@ -212,6 +226,13 @@ namespace Laps.Core
                 type = EHubMessageTypes.Hello,
                 stringArg = _localIp
             }, _hostIp);
+        }
+
+        /// <summary>Envoie un message à un poste précis (sync d'état à la connexion).</summary>
+        public void SendToPeer(EHubMessage msg, string ip)
+        {
+            if (msg == null || _sender == null || string.IsNullOrWhiteSpace(ip)) return;
+            SendToIp(msg, ip.Trim());
         }
 
         public void Send(EHubMessage msg)

@@ -9,6 +9,8 @@ public class EHubControlPanel : MonoBehaviour
 {
     private PixelHubBootstrapper _bootstrap;
     private AudioInteractiveManager _audio;
+    private OtherDevicesPanel _otherDevices;
+    private DanmarkKeyEffect _danmark;
     private EHubNetworkBridge _eHub;
     private string _hostIpInput = "";
 
@@ -17,20 +19,18 @@ public class EHubControlPanel : MonoBehaviour
         _bootstrap = GetComponent<PixelHubBootstrapper>();
         _eHub = GetComponent<EHubNetworkBridge>();
         _audio = FindObjectOfType<AudioInteractiveManager>();
+        _otherDevices = GetComponent<OtherDevicesPanel>();
+        _danmark = GetComponent<DanmarkKeyEffect>();
         _hostIpInput = EHubNetworkBridge.GetSavedHostIp();
     }
 
     private void OnGUI()
     {
         const int margin = 10;
-        const int panelW = 320;
-        int panelH = _eHub != null && _eHub.IsConnected ? 200 : 130;
-
-        if (_eHub != null && _eHub.IsConnected && _audio != null && _audio.soundMappings.Count > 0)
-            panelH += Mathf.Min(_audio.soundMappings.Count, 4) * 24 + 8;
+        const int panelW = 360;
+        int panelH = ComputePanelHeight();
 
         float x = margin;
-        // Réserve la zone projecteurs au-dessus (évite le chevauchement).
         float y = Screen.height - panelH - margin;
 
         GUI.Box(new Rect(x, y, panelW, panelH), "eHub — sync équipe");
@@ -47,11 +47,30 @@ public class EHubControlPanel : MonoBehaviour
         lineY += 6;
         DrawModeButtons(innerX, ref lineY, innerW);
         lineY += 4;
+        DrawTimelineButtons(innerX, ref lineY, innerW);
+        lineY += 4;
         DrawDebugButtons(innerX, ref lineY, innerW);
         lineY += 4;
-        DrawPauseButton(innerX, ref lineY, innerW);
+        DrawDeviceButtons(innerX, ref lineY, innerW);
+        lineY += 4;
+        DrawLyreButtons(innerX, ref lineY, innerW);
+        lineY += 4;
+        DrawPauseAndVolume(innerX, ref lineY, innerW);
         lineY += 4;
         DrawSfxButtons(innerX, ref lineY, innerW);
+        lineY += 4;
+        DrawDanmarkButtons(innerX, ref lineY, innerW);
+    }
+
+    private int ComputePanelHeight()
+    {
+        if (_eHub == null || !_eHub.IsConnected)
+            return 150;
+
+        int h = 420;
+        if (_audio != null && _audio.soundMappings.Count > 0)
+            h += Mathf.Min(_audio.soundMappings.Count, 4) * 24 + 8;
+        return h;
     }
 
     private void DrawConnectionPanel(float x, ref float y, float w)
@@ -63,32 +82,55 @@ public class EHubControlPanel : MonoBehaviour
             return;
         }
 
-        GUI.Label(new Rect(x, y, w, 18), $"Votre IP : {_eHub.LocalIp}  (donnez-la à l'équipe si vous êtes hôte)");
+        GUI.Label(new Rect(x, y, w, 18), $"Votre IP : {_eHub.LocalIp}  (port {_eHub.Port})");
         y += 20;
 
         if (_eHub.IsConnected)
         {
-            if (_eHub.Role == EHubRole.Host)
-            {
-                GUI.Label(new Rect(x, y, w, 18), $"★ HÔTE — {_eHub.TotalPostes} poste(s)  [{_eHub.SessionId}]");
-                y += 18;
-                GUI.Label(new Rect(x, y, w, 18), $"Clients : {_eHub.ActivePeersLabel}");
-            }
-            else
-            {
-                GUI.Label(new Rect(x, y, w, 18), $"Connecté à l'hôte {_eHub.HostIp}  [{_eHub.SessionId}]");
-            }
-            y += 22;
+            DrawConnectedPanel(x, ref y, w);
             return;
         }
 
-        // Pas encore connecté
+        DrawDisconnectedPanel(x, ref y, w);
+    }
+
+    private void DrawConnectedPanel(float x, ref float y, float w)
+    {
+        if (_eHub.Role == EHubRole.Host)
+        {
+            GUI.Label(new Rect(x, y, w, 18),
+                $"★ HÔTE — partagez {_eHub.LocalIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+            y += 18;
+            GUI.Label(new Rect(x, y, w, 18), $"Clients connectés ({_eHub.TotalPostes - 1}) : {_eHub.ActivePeersLabel}");
+        }
+        else
+        {
+            GUI.Label(new Rect(x, y, w, 18),
+                $"● CLIENT — connecté à {_eHub.HostIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+            y += 18;
+            GUI.Label(new Rect(x, y, w, 36),
+                "Accès complet : mêmes touches et boutons que l'hôte.\nDéconnectez-vous pour arrêter le contrôle distant.");
+        }
+
+        y += 40;
+
+        if (GUI.Button(new Rect(x, y, w, 26), "Se déconnecter"))
+            _eHub.Disconnect();
+
+        y += 30;
+    }
+
+    private void DrawDisconnectedPanel(float x, ref float y, float w)
+    {
         float halfW = (w - 4) / 2f;
         if (GUI.Button(new Rect(x, y, halfW, 28), "Je suis l'hôte"))
             _eHub.StartAsHost();
 
-        GUI.Label(new Rect(x + halfW + 4, y + 6, halfW, 18), "ou IP hôte :");
-        y += 30;
+        GUI.Label(new Rect(x + halfW + 4, y + 6, halfW, 18), "ou client :");
+        y += 32;
+
+        GUI.Label(new Rect(x, y, w, 16), "IP de l'hôte :");
+        y += 18;
 
         _hostIpInput = GUI.TextField(new Rect(x, y, w - 84, 24), _hostIpInput);
         if (GUI.Button(new Rect(x + w - 78, y, 78, 24), "Connecter"))
@@ -96,13 +138,13 @@ public class EHubControlPanel : MonoBehaviour
 
         y += 28;
         GUI.Label(new Rect(x, y, w, 32),
-            "1) Une personne = Hôte\n2) Les autres tapent son IP puis Connecter");
+            "1) Une personne clique « Je suis l'hôte »\n2) Les autres saisissent son IP puis Connecter");
         y += 34;
     }
 
     private void DrawModeButtons(float x, ref float y, float w)
     {
-        float btnW = (w - 6) / 4f;
+        float btnW = (w - 8) / 5f;
         if (GUI.Button(new Rect(x, y, btnW, 22), "Timeline"))
             _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.Timeline);
         if (GUI.Button(new Rect(x + btnW + 2, y, btnW, 22), "Debug"))
@@ -111,6 +153,20 @@ public class EHubControlPanel : MonoBehaviour
             _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.Manual);
         if (GUI.Button(new Rect(x + (btnW + 2) * 3, y, btnW, 22), "Video"))
             _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.VideoCapture);
+        if (GUI.Button(new Rect(x + (btnW + 2) * 4, y, btnW, 22), "eHuB"))
+            _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.EHub);
+        y += 26;
+    }
+
+    private void DrawTimelineButtons(float x, ref float y, float w)
+    {
+        float btnW = (w - 4) / 3f;
+        if (GUI.Button(new Rect(x, y, btnW, 22), "▶ Play"))
+            _bootstrap?.RequestPlayShow();
+        if (GUI.Button(new Rect(x + btnW + 2, y, btnW, 22), "⏸ TL Pause"))
+            _bootstrap?.RequestPauseShow();
+        if (GUI.Button(new Rect(x + (btnW + 2) * 2, y, btnW, 22), "⏹ Stop"))
+            _bootstrap?.RequestStopShow();
         y += 26;
     }
 
@@ -119,7 +175,7 @@ public class EHubControlPanel : MonoBehaviour
         float btnW = (w - 10) / 5f;
         if (GUI.Button(new Rect(x, y, btnW, 22), "1ère LED"))
             _bootstrap?.RequestDebugColor(EHubDebugColor.FirstLed);
-        if (GUI.Button(new Rect(x + btnW + 2, y, btnW, 22), "R"))
+        if (GUI.Button(new Rect(x + (btnW + 2), y, btnW, 22), "R"))
             _bootstrap?.RequestDebugColor(EHubDebugColor.Red);
         if (GUI.Button(new Rect(x + (btnW + 2) * 2, y, btnW, 22), "G"))
             _bootstrap?.RequestDebugColor(EHubDebugColor.Green);
@@ -130,11 +186,58 @@ public class EHubControlPanel : MonoBehaviour
         y += 26;
     }
 
-    private void DrawPauseButton(float x, ref float y, float w)
+    private void DrawDeviceButtons(float x, ref float y, float w)
     {
-        string label = _audio != null && _audio.IsPaused ? "▶ Reprendre" : "⏸ Pause";
-        if (GUI.Button(new Rect(x, y, w, 24), label))
+        float btnW = (w - 10) / 5f;
+        if (GUI.Button(new Rect(x, y, btnW, 22), "MH1"))
+            _bootstrap?.RequestTestMovingHead(1);
+        if (GUI.Button(new Rect(x + btnW + 2, y, btnW, 22), "MH2"))
+            _bootstrap?.RequestTestMovingHead(2);
+        if (GUI.Button(new Rect(x + (btnW + 2) * 2, y, btnW, 22), "MH3"))
+            _bootstrap?.RequestTestMovingHead(3);
+        if (GUI.Button(new Rect(x + (btnW + 2) * 3, y, btnW, 22), "MH4"))
+            _bootstrap?.RequestTestMovingHead(4);
+        if (GUI.Button(new Rect(x + (btnW + 2) * 4, y, btnW, 22), "Proj P"))
+            _bootstrap?.RequestTestStaticProjector();
+        y += 26;
+
+        if (GUI.Button(new Rect(x, y, w, 22), "Lyres OFF (F5)"))
+            _bootstrap?.RequestBlackOutLyres();
+        y += 26;
+    }
+
+    private void DrawLyreButtons(float x, ref float y, float w)
+    {
+        if (_otherDevices == null) return;
+
+        float btnW = (w - 8) / 5f;
+        for (int i = 0; i < 4; i++)
+        {
+            if (GUI.Button(new Rect(x + i * (btnW + 2), y, btnW, 22), $"L{i + 1}"))
+                _otherDevices.RequestPresetColor(i, (i * 2) % 8);
+        }
+        if (GUI.Button(new Rect(x + 4 * (btnW + 2), y, btnW, 22), "F3 beat"))
+            _otherDevices.RequestNightclubToggle();
+        y += 26;
+
+        float half = (w - 2) / 2f;
+        if (GUI.Button(new Rect(x, y, half, 22), "Toutes R"))
+            _otherDevices.RequestSetAllPreset(0);
+        if (GUI.Button(new Rect(x + half + 2, y, half, 22), "Toutes Off"))
+            _otherDevices.RequestSetAllPreset(999);
+        y += 26;
+    }
+
+    private void DrawPauseAndVolume(float x, ref float y, float w)
+    {
+        float third = (w - 4) / 3f;
+        string pauseLabel = _audio != null && _audio.IsPaused ? "▶ Reprendre" : "⏸ Pause globale";
+        if (GUI.Button(new Rect(x, y, third, 24), pauseLabel))
             _audio?.RequestPauseToggle();
+        if (GUI.Button(new Rect(x + third + 2, y, third, 24), "Vol +"))
+            _audio?.RequestVolumeDelta(_audio != null ? _audio.volumeStep : 0.1f);
+        if (GUI.Button(new Rect(x + 2 * (third + 2), y, third, 24), "Vol −"))
+            _audio?.RequestVolumeDelta(_audio != null ? -_audio.volumeStep : -0.1f);
         y += 28;
     }
 
@@ -155,6 +258,39 @@ public class EHubControlPanel : MonoBehaviour
             if (GUI.Button(new Rect(x + i * (btnW + 2), y, btnW, 22), label))
                 _audio.RequestTriggerEffect(i);
         }
+        y += 26;
+
+        float fxW = (w - 6) / 4f;
+        if (GUI.Button(new Rect(x, y, fxW, 22), "Flamme ←"))
+            _audio.RequestTriggerEffect(-99);
+        if (GUI.Button(new Rect(x + fxW + 2, y, fxW, 22), "Flamme →"))
+            _audio.RequestTriggerEffect(-98);
+        if (GUI.Button(new Rect(x + 2 * (fxW + 2), y, fxW, 22), "Laser L"))
+            _audio.RequestTriggerEffect(-97);
+        if (GUI.Button(new Rect(x + 3 * (fxW + 2), y, fxW, 22), "Shock S"))
+            _audio.RequestTriggerEffect(-96);
+        y += 26;
+    }
+
+    private void DrawDanmarkButtons(float x, ref float y, float w)
+    {
+        if (_danmark == null) return;
+
+        float btnW = (w - 12) / 7f;
+        string letters = "DANEMRK";
+        for (int i = 0; i < letters.Length; i++)
+        {
+            string ch = letters[i].ToString();
+            if (GUI.Button(new Rect(x + i * (btnW + 2), y, btnW, 22), ch))
+                _danmark.RequestSpawnLetter(ch);
+        }
+        y += 26;
+
+        float half = (w - 2) / 2f;
+        if (GUI.Button(new Rect(x, y, half, 22), "DANEMARK complet"))
+            _danmark.RequestShowDanmarkComplete();
+        if (GUI.Button(new Rect(x + half + 2, y, half, 22), "Masquer DANEMARK"))
+            _danmark.RequestHideDanmarkComplete();
         y += 26;
     }
 }
