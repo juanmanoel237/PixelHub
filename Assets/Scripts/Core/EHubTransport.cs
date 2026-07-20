@@ -79,6 +79,7 @@ namespace Laps.Core
         public string DiscoveredHostIp { get; private set; }
         public string LastHostConflictIp { get; private set; }
         private long _lastHostConflictLogMs;
+        private bool _requestStateSyncOnNextHello;
 
         public EHubTransport(int port, string sessionId)
         {
@@ -143,7 +144,10 @@ namespace Laps.Core
 
         public void Tick()
         {
-            if (_role != EHubRole.Client || _clientLinkState != EHubClientLinkState.Connecting) return;
+            if (_role != EHubRole.Client) return;
+            if (_clientLinkState == EHubClientLinkState.Linked) return;
+            if (_clientLinkState != EHubClientLinkState.Connecting &&
+                _clientLinkState != EHubClientLinkState.Failed) return;
             if (NowMs() - _connectStartedMs < 12000) return;
 
             _clientLinkState = EHubClientLinkState.Failed;
@@ -232,7 +236,8 @@ namespace Laps.Core
                     }
 
                     if (_role == EHubRole.Client &&
-                        _clientLinkState == EHubClientLinkState.Connecting &&
+                        (_clientLinkState == EHubClientLinkState.Connecting ||
+                         _clientLinkState == EHubClientLinkState.Failed) &&
                         IsFromTargetHost(remoteIp) &&
                         msg.type != EHubMessageTypes.HostBeacon)
                     {
@@ -281,7 +286,7 @@ namespace Laps.Core
         {
             if (_role != EHubRole.Client) return;
 
-            bool wasLinked = IsClientLinked();
+            bool wasLinked = _clientLinkState == EHubClientLinkState.Linked;
             _hostIp = remoteIp;
             _lastHostContactMs = NowMs();
             _clientLinkState = EHubClientLinkState.Linked;
@@ -375,8 +380,13 @@ namespace Laps.Core
 
             SendHelloAckTo(clientIp, 1 + CountActiveClients());
 
-            if (isNewClient)
+            bool wantsResync = !string.IsNullOrEmpty(msg.stringArg) &&
+                               msg.stringArg.IndexOf("|resync", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (isNewClient || wantsResync)
                 ClientJoined?.Invoke(clientIp);
+
+            if (isNewClient)
+                Debug.Log($"[eHub] Nouveau client : {clientIp}");
         }
 
         private void SendHelloAckTo(string clientIp, int posteCount)
@@ -419,7 +429,8 @@ namespace Laps.Core
 
             if (_role == EHubRole.Client)
             {
-                if (_clientLinkState == EHubClientLinkState.Connecting)
+                if (_clientLinkState == EHubClientLinkState.Connecting ||
+                    _clientLinkState == EHubClientLinkState.Failed)
                     return true;
 
                 return EHubNetworkUtil.IpEquals(remoteIp, _hostIp);
@@ -435,14 +446,23 @@ namespace Laps.Core
 
         public bool TryDequeue(out EHubMessage msg) => _incoming.TryDequeue(out msg);
 
+        public void RequestStateSyncOnNextHello() => _requestStateSyncOnNextHello = true;
+
         public void SendHello()
         {
             if (_role != EHubRole.Client || string.IsNullOrEmpty(_hostIp)) return;
 
+            string helloArg = _localIp;
+            if (_requestStateSyncOnNextHello)
+            {
+                helloArg += "|resync";
+                _requestStateSyncOnNextHello = false;
+            }
+
             var msg = new EHubMessage
             {
                 type = EHubMessageTypes.Hello,
-                stringArg = _localIp
+                stringArg = helloArg
             };
 
             // Unicast direct + broadcast (certains Wi-Fi bloquent le trafic direct entre clients)

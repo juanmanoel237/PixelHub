@@ -111,8 +111,7 @@ public class EHubControlPanel : MonoBehaviour
             GUI.color = Color.white;
             y += 22;
         }
-
-        if (!string.IsNullOrEmpty(_eHub.LastConnectionError))
+        else if (!_eHub.IsConnected && !string.IsNullOrEmpty(_eHub.LastConnectionError))
         {
             GUI.color = new Color(1f, 0.75f, 0.55f);
             GUI.Label(new Rect(x, y, w, 32), _eHub.LastConnectionError);

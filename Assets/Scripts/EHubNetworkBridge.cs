@@ -168,12 +168,14 @@ public class EHubNetworkBridge : MonoBehaviour
     {
         if (_transport == null || _transport.Role != EHubRole.Host) return;
         PushFullStateTo(clientIp);
-        Debug.Log($"[eHub] Client connecté ({clientIp}) — état complet synchronisé.");
     }
 
     private void OnClientLinked()
     {
-        Debug.Log("[eHub] Connecté à l'hôte — télécommande active. Le mur LED reste piloté par l'hôte.");
+        _helloTimer = 0f;
+        _transport?.RequestStateSyncOnNextHello();
+        _transport?.SendHello();
+        Debug.Log("[eHub] Connecté à l'hôte — télécommande active. État synchronisé depuis l'hôte.");
     }
 
     private void OnHostDiscovered(string hostIp)
@@ -198,15 +200,25 @@ public class EHubNetworkBridge : MonoBehaviour
     {
         if (_transport == null || _bootstrap == null) return;
 
-        _bootstrap.GetTimelineSyncState(out int timelineState, out float timelineTime);
+        _bootstrap.GetFullSyncState(
+            out int mode,
+            out int timelineState,
+            out float timelineTime,
+            out float directorTime,
+            out int directorState);
+
+        string directorPayload = directorTime >= 0f
+            ? $"dt:{directorTime:F3}|ds:{directorState}"
+            : "";
 
         _transport.SendToPeer(new EHubMessage
         {
             type = EHubMessageTypes.StateSync,
-            intArg = (int)_bootstrap.CurrentMode,
+            intArg = mode,
             intArg2 = timelineState,
             floatArg = (_audio != null && _audio.IsPaused) ? 1f : 0f,
-            floatArg2 = timelineTime
+            floatArg2 = timelineTime,
+            stringArg = directorPayload
         }, clientIp);
 
         _transport.SendToPeer(new EHubMessage
@@ -293,9 +305,14 @@ public class EHubNetworkBridge : MonoBehaviour
                     break;
 
                 case EHubMessageTypes.StateSync:
-                    _bootstrap?.ApplySwitchMode((PixelHubBootstrapper.StartMode)msg.intArg);
-                    _bootstrap?.ApplyTimelineSync(msg.intArg2, msg.floatArg2);
-                    _audio?.SetPaused(msg.floatArg >= 0.5f, fromNetwork: true);
+                    ParseDirectorPayload(msg.stringArg, out float directorTime, out int directorState);
+                    _bootstrap?.ApplyFullStateSync(
+                        msg.intArg,
+                        msg.intArg2,
+                        msg.floatArg2,
+                        directorTime,
+                        directorState,
+                        msg.floatArg >= 0.5f);
                     break;
 
                 case EHubMessageTypes.DeviceAction:
@@ -326,6 +343,26 @@ public class EHubNetworkBridge : MonoBehaviour
         finally
         {
             _applyingRemote = false;
+        }
+    }
+
+    private static void ParseDirectorPayload(string payload, out float directorTime, out int directorState)
+    {
+        directorTime = -1f;
+        directorState = 0;
+        if (string.IsNullOrEmpty(payload)) return;
+
+        foreach (string part in payload.Split('|'))
+        {
+            if (part.StartsWith("dt:", System.StringComparison.Ordinal))
+            {
+                float.TryParse(part.Substring(3), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out directorTime);
+            }
+            else if (part.StartsWith("ds:", System.StringComparison.Ordinal))
+            {
+                int.TryParse(part.Substring(3), out directorState);
+            }
         }
     }
 

@@ -372,7 +372,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         _routingEngine.StopRoutingThread();
         SetProviderWithDevices(_videoCapture);
         _routingEngine.StartRouting();
-        _currentMode = StartMode.Manual;
+        _currentMode = StartMode.VideoCapture;
         SyncPreview(_videoCapture, "Video Capture (Feux d'artifice)");
         Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
     }
@@ -436,6 +436,71 @@ public class PixelHubBootstrapper : MonoBehaviour
             case EHubTimelineAction.Stop: StopShow(); break;
         }
         RefreshDisplay();
+    }
+
+    /// <summary>État complet pour sync eHub à la connexion d'un client.</summary>
+    public void GetFullSyncState(
+        out int mode,
+        out int timelineState,
+        out float timelineTime,
+        out float directorTime,
+        out int directorState)
+    {
+        mode = (int)_currentMode;
+        directorTime = -1f;
+        directorState = 0;
+        GetTimelineSyncState(out timelineState, out timelineTime);
+
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            directorTime = (float)director.time;
+            directorState = (int)director.state;
+        }
+    }
+
+    /// <summary>Aligne l'écran local sur l'hôte (connexion client ou resync).</summary>
+    public void ApplyFullStateSync(
+        int mode,
+        int timelineState,
+        float timelineTime,
+        float directorTime,
+        int directorState,
+        bool paused)
+    {
+        var targetMode = (StartMode)mode;
+        ApplySwitchMode(targetMode);
+
+        if (targetMode == StartMode.Timeline)
+            ApplyTimelineSync(timelineState, timelineTime);
+        else if (targetMode == StartMode.Manual)
+            ApplyDirectorSync(directorTime, directorState);
+
+        var audio = FindObjectOfType<AudioInteractiveManager>();
+        audio?.SetPaused(paused, fromNetwork: true);
+        RefreshDisplay();
+    }
+
+    public void ApplyDirectorSync(float time, int state)
+    {
+        if (time < 0f) return;
+
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director == null) return;
+
+        director.time = time;
+        switch ((PlayState)state)
+        {
+            case PlayState.Playing:
+                director.Play();
+                break;
+            case PlayState.Paused:
+                director.Pause();
+                break;
+            default:
+                director.Stop();
+                break;
+        }
     }
 
     /// <summary>État timeline pour sync eHub à la connexion d'un client.</summary>
