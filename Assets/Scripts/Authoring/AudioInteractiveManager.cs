@@ -206,14 +206,28 @@ namespace Laps.Authoring
         private void HandleVolumeControl()
         {
             if (Input.GetKeyDown(KeyCode.UpArrow))
-            {
-                AudioListener.volume = Mathf.Clamp01(AudioListener.volume + volumeStep);
-                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
-            }
+                RequestVolumeDelta(volumeStep);
             else if (Input.GetKeyDown(KeyCode.DownArrow))
+                RequestVolumeDelta(-volumeStep);
+        }
+
+        public void RequestVolumeDelta(float delta)
+        {
+            float next = Mathf.Clamp01(AudioListener.volume + delta);
+            ApplyVolume(next, fromNetwork: false);
+        }
+
+        public void ApplyVolume(float volume, bool fromNetwork = false)
+        {
+            AudioListener.volume = Mathf.Clamp01(volume);
+            Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+            if (!fromNetwork)
             {
-                AudioListener.volume = Mathf.Clamp01(AudioListener.volume - volumeStep);
-                Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
+                EHubSyncBus.PublishLocal(new EHubMessage
+                {
+                    type = EHubMessageTypes.VolumeSet,
+                    floatArg = AudioListener.volume
+                });
             }
         }
 

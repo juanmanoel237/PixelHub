@@ -9,33 +9,94 @@ namespace Laps.Authoring
     /// </summary>
     public class DanmarkKeyEffect : MonoBehaviour
     {
-        /// <summary>
-        /// Lance une lettre volante sur la grille LED.
-        /// À appeler depuis la Timeline avec un paramètre String ("D", "A", "N", etc.).
-        /// </summary>
+        /// <summary>Lance une lettre volante sur la grille LED (local + sync eHub).</summary>
+        public void RequestSpawnLetter(string letter)
+        {
+            ApplySpawnLetter(letter);
+            if (!string.IsNullOrEmpty(letter))
+            {
+                EHubSyncBus.PublishLocal(new EHubMessage
+                {
+                    type = EHubMessageTypes.DanmarkLetter,
+                    stringArg = letter.Substring(0, 1)
+                });
+            }
+        }
+
+        /// <summary>À appeler depuis la Timeline avec un paramètre String ("D", "A", "N", etc.).</summary>
         public void SpawnLetter(string letter)
         {
-            if (string.IsNullOrEmpty(letter)) return;
-
-            char ch = letter[0];
-            LedTextOverlay.SpawnLetter(ch);
-            Debug.Log($"[Danmark Timeline] Lettre '{ch}' lancée !");
+            ApplySpawnLetter(letter);
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.DanmarkLetter,
+                stringArg = string.IsNullOrEmpty(letter) ? "" : letter.Substring(0, 1)
+            });
         }
 
-        /// <summary>
-        /// Affiche le mot complet "DANEMARK" en bas de l'écran.
-        /// À appeler depuis la Timeline (Signal sans paramètre).
-        /// </summary>
+        public void RequestShowDanmarkComplete()
+        {
+            ApplyShowDanmarkComplete();
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.DanmarkLetter,
+                stringArg = EHubDanmarkAction.Complete
+            });
+        }
+
         public void ShowDanmarkComplete()
         {
-            LedTextOverlay.SetDanmarkComplete(true);
-            Debug.Log("[Danmark Timeline] ★ DANEMARK complet déclenché !");
+            ApplyShowDanmarkComplete();
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.DanmarkLetter,
+                stringArg = EHubDanmarkAction.Complete
+            });
         }
 
-        /// <summary>
-        /// Désactive l'affichage du mot complet.
-        /// </summary>
+        public void RequestHideDanmarkComplete()
+        {
+            ApplyHideDanmarkComplete();
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.DanmarkLetter,
+                stringArg = EHubDanmarkAction.Hide
+            });
+        }
+
         public void HideDanmarkComplete()
+        {
+            ApplyHideDanmarkComplete();
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.DanmarkLetter,
+                stringArg = EHubDanmarkAction.Hide
+            });
+        }
+
+        public void ApplyDanmarkFromNetwork(string arg)
+        {
+            if (string.IsNullOrEmpty(arg)) return;
+            if (arg == EHubDanmarkAction.Complete) { ApplyShowDanmarkComplete(); return; }
+            if (arg == EHubDanmarkAction.Hide) { ApplyHideDanmarkComplete(); return; }
+            ApplySpawnLetter(arg);
+        }
+
+        private void ApplySpawnLetter(string letter)
+        {
+            if (string.IsNullOrEmpty(letter)) return;
+            char ch = letter[0];
+            LedTextOverlay.SpawnLetter(ch);
+            Debug.Log($"[Danmark] Lettre '{ch}' lancée !");
+        }
+
+        private void ApplyShowDanmarkComplete()
+        {
+            LedTextOverlay.SetDanmarkComplete(true);
+            Debug.Log("[Danmark] ★ DANEMARK complet déclenché !");
+        }
+
+        private void ApplyHideDanmarkComplete()
         {
             LedTextOverlay.SetDanmarkComplete(false);
         }

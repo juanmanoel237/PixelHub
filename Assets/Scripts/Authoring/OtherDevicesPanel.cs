@@ -35,6 +35,15 @@ namespace Laps.Authoring
         private float _strobeUntil;
         private readonly float[] _headHue = { 0.86f, 0.55f, 0.13f, 0.72f };
 
+        private float _panTiltSyncAccumPan;
+        private float _panTiltSyncAccumTilt;
+        private float _panTiltSyncTimer;
+        private int _panTiltSyncHead = -1;
+
+        public int ColorTargetHead => _colorTargetHead;
+        public bool NightclubMode => _nightclubMode;
+        public bool BeatColorCycle => _beatColorCycle;
+
         private static readonly Color32[] PresetColors =
         {
             new Color32(255, 0, 0, 255),
@@ -116,12 +125,234 @@ namespace Laps.Authoring
 
         public void SetNightclubMode(bool enabled) => _nightclubMode = enabled;
 
+        public void RequestSelectHead(int head)
+        {
+            ApplySelectHead(head);
+            PublishLyre(EHubLyreAction.SelectHead, head);
+        }
+
+        public void RequestNightclubToggle()
+        {
+            _nightclubMode = !_nightclubMode;
+            PublishLyre(EHubLyreAction.NightclubToggle, _nightclubMode ? 1 : 0);
+        }
+
+        public void RequestBeatColorCycle(bool enabled)
+        {
+            _beatColorCycle = enabled;
+            PublishLyre(EHubLyreAction.BeatColorCycle, enabled ? 1 : 0);
+        }
+
+        public void RequestPresetColor(int head, int presetIndex)
+        {
+            ApplyPresetColor(head, presetIndex);
+            PublishLyre(EHubLyreAction.PresetColor, head, presetIndex);
+        }
+
+        public void RequestSetAllPreset(int presetIndex)
+        {
+            ApplySetAllPreset(presetIndex);
+            PublishLyre(EHubLyreAction.SetAllPreset, -1, presetIndex);
+        }
+
+        public void RequestSetRgb(int head, byte r, byte g, byte b)
+        {
+            ApplySetRgb(head, r, g, b);
+            PublishLyre(EHubLyreAction.SetRgb, head, 0, 0, $"{r},{g},{b}");
+        }
+
+        public void ApplyLyreControl(EHubMessage msg)
+        {
+            switch (msg.intArg)
+            {
+                case EHubLyreAction.SelectHead:
+                    ApplySelectHead(msg.intArg2);
+                    break;
+                case EHubLyreAction.PresetColor:
+                    ApplyPresetColor(msg.intArg2, (int)msg.floatArg);
+                    break;
+                case EHubLyreAction.PanTiltDelta:
+                    ApplyPanTiltDelta(msg.intArg2, msg.floatArg, msg.floatArg2);
+                    break;
+                case EHubLyreAction.NightclubToggle:
+                    _nightclubMode = msg.intArg2 == 1;
+                    break;
+                case EHubLyreAction.SetAllPreset:
+                    ApplySetAllPreset((int)msg.floatArg);
+                    break;
+                case EHubLyreAction.SetRgb:
+                    if (TryParseRgb(msg.stringArg, out byte r, out byte g, out byte b))
+                        ApplySetRgb(msg.intArg2, r, g, b);
+                    break;
+                case EHubLyreAction.BeatColorCycle:
+                    _beatColorCycle = msg.intArg2 == 1;
+                    break;
+                case EHubLyreAction.SyncSnapshot:
+                    ApplySyncSnapshot(msg.stringArg);
+                    break;
+            }
+        }
+
+        public string BuildSyncSnapshot()
+        {
+            var parts = new System.Text.StringBuilder();
+            parts.Append(_colorTargetHead).Append('|');
+            parts.Append(_nightclubMode ? '1' : '0').Append('|');
+            parts.Append(_beatColorCycle ? '1' : '0').Append('|');
+            for (int i = 0; i < HeadCount; i++)
+            {
+                var s = _states[FirstHeadIndex + i];
+                parts.Append(i).Append(':').Append(s.pan.ToString("F1")).Append(',')
+                    .Append(s.tilt.ToString("F1")).Append(',')
+                    .Append(s.color.r).Append(',').Append(s.color.g).Append(',')
+                    .Append(s.color.b).Append(',').Append(s.dimmer).Append('|');
+            }
+            var st = _states[StaticIndex];
+            parts.Append("S:").Append(st.color.r).Append(',').Append(st.color.g).Append(',')
+                .Append(st.color.b).Append(',').Append(st.dimmer);
+            return parts.ToString();
+        }
+
+        private void ApplySyncSnapshot(string data)
+        {
+            if (string.IsNullOrEmpty(data)) return;
+            string[] chunks = data.Split('|');
+            if (chunks.Length < 3) return;
+
+            if (int.TryParse(chunks[0], out int target)) _colorTargetHead = target;
+            _nightclubMode = chunks[1] == "1";
+            _beatColorCycle = chunks[2] == "1";
+
+            for (int c = 3; c < chunks.Length; c++)
+            {
+                string chunk = chunks[c];
+                if (string.IsNullOrEmpty(chunk)) continue;
+                if (chunk.StartsWith("S:"))
+                {
+                    if (TryParseHeadState(chunk.Substring(2), out _, out _, out byte r, out byte g, out byte b, out byte dim))
+                    {
+                        var s = _states[StaticIndex];
+                        s.color = new Color32(r, g, b, 255);
+                        s.dimmer = dim;
+                        _states[StaticIndex] = s;
+                    }
+                    continue;
+                }
+
+                int colon = chunk.IndexOf(':');
+                if (colon <= 0) continue;
+                if (!int.TryParse(chunk.Substring(0, colon), out int head)) continue;
+                if (!TryParseHeadState(chunk.Substring(colon + 1), out float pan, out float tilt,
+                        out byte cr, out byte cg, out byte cb, out byte cdim)) continue;
+
+                int idx = FirstHeadIndex + Mathf.Clamp(head, 0, HeadCount - 1);
+                var hs = _states[idx];
+                hs.pan = pan;
+                hs.tilt = tilt;
+                hs.color = new Color32(cr, cg, cb, 255);
+                hs.dimmer = cdim;
+                _states[idx] = hs;
+            }
+        }
+
+        private static bool TryParseHeadState(string s, out float pan, out float tilt,
+            out byte r, out byte g, out byte b, out byte dimmer)
+        {
+            pan = tilt = 0;
+            r = g = b = dimmer = 0;
+            string[] p = s.Split(',');
+            if (p.Length < 6) return false;
+            return float.TryParse(p[0], out pan)
+                && float.TryParse(p[1], out tilt)
+                && byte.TryParse(p[2], out r)
+                && byte.TryParse(p[3], out g)
+                && byte.TryParse(p[4], out b)
+                && byte.TryParse(p[5], out dimmer);
+        }
+
+        private static bool TryParseRgb(string s, out byte r, out byte g, out byte b)
+        {
+            r = g = b = 0;
+            if (string.IsNullOrEmpty(s)) return false;
+            string[] p = s.Split(',');
+            return p.Length >= 3
+                && byte.TryParse(p[0], out r)
+                && byte.TryParse(p[1], out g)
+                && byte.TryParse(p[2], out b);
+        }
+
+        private void PublishLyre(int action, int head, float f1 = 0f, float f2 = 0f, string s = null)
+        {
+            EHubSyncBus.PublishLocal(new EHubMessage
+            {
+                type = EHubMessageTypes.LyreControl,
+                intArg = action,
+                intArg2 = head,
+                floatArg = f1,
+                floatArg2 = f2,
+                stringArg = s
+            });
+        }
+
+        private void ApplySelectHead(int head) => _colorTargetHead = Mathf.Clamp(head, 0, HeadCount - 1);
+
+        private void ApplyPresetColor(int head, int presetIndex)
+        {
+            head = Mathf.Clamp(head, 0, HeadCount - 1);
+            int idx = FirstHeadIndex + head;
+            var s = _states[idx];
+            if (presetIndex == 999)
+                ApplyColor(ref s, new Color32(0, 0, 0, 255));
+            else if (presetIndex >= 0 && presetIndex < PresetColors.Length)
+                ApplyColor(ref s, PresetColors[presetIndex]);
+            _states[idx] = s;
+        }
+
+        private void ApplySetAllPreset(int presetIndex)
+        {
+            Color32 c = presetIndex == 999
+                ? new Color32(0, 0, 0, 255)
+                : PresetColors[Mathf.Clamp(presetIndex, 0, PresetColors.Length - 1)];
+            SetAllHeadsColor(c);
+        }
+
+        private void ApplySetRgb(int head, byte r, byte g, byte b)
+        {
+            head = Mathf.Clamp(head, 0, HeadCount - 1);
+            int idx = FirstHeadIndex + head;
+            var s = _states[idx];
+            ApplyColor(ref s, new Color32(r, g, b, 255));
+            _states[idx] = s;
+        }
+
+        private void ApplyPanTiltDelta(int head, float panDelta, float tiltDelta)
+        {
+            head = Mathf.Clamp(head, 0, HeadCount - 1);
+            int idx = FirstHeadIndex + head;
+            var s = _states[idx];
+            s.pan = Mathf.Clamp(s.pan + panDelta, 0f, 255f);
+            s.tilt = Mathf.Clamp(s.tilt + tiltDelta, 0f, 255f);
+            _states[idx] = s;
+        }
+
+        private void FlushPanTiltSync()
+        {
+            if (_panTiltSyncHead < 0) return;
+            if (Mathf.Abs(_panTiltSyncAccumPan) < 0.001f && Mathf.Abs(_panTiltSyncAccumTilt) < 0.001f)
+                return;
+
+            PublishLyre(EHubLyreAction.PanTiltDelta, _panTiltSyncHead, _panTiltSyncAccumPan, _panTiltSyncAccumTilt);
+            _panTiltSyncAccumPan = 0f;
+            _panTiltSyncAccumTilt = 0f;
+            _panTiltSyncTimer = 0f;
+        }
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
                 _show = !_show;
             if (Input.GetKeyDown(KeyCode.F3))
-                _nightclubMode = !_nightclubMode;
+                RequestNightclubToggle();
 
             HandleColorHotkeys();
             HandleArrowControl();
@@ -151,6 +382,17 @@ namespace Laps.Authoring
             s.pan = Mathf.Clamp(s.pan + panDelta, 0f, 255f);
             s.tilt = Mathf.Clamp(s.tilt + tiltDelta, 0f, 255f);
             _states[idx] = s;
+
+            if (_panTiltSyncHead != _colorTargetHead)
+            {
+                FlushPanTiltSync();
+                _panTiltSyncHead = _colorTargetHead;
+            }
+            _panTiltSyncAccumPan += panDelta;
+            _panTiltSyncAccumTilt += tiltDelta;
+            _panTiltSyncTimer += Time.deltaTime;
+            if (_panTiltSyncTimer >= 0.05f)
+                FlushPanTiltSync();
         }
 
         /// <summary>
@@ -161,29 +403,23 @@ namespace Laps.Authoring
         {
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1)) _colorTargetHead = 0;
-                else if (Input.GetKeyDown(KeyCode.Alpha2)) _colorTargetHead = 1;
-                else if (Input.GetKeyDown(KeyCode.Alpha3)) _colorTargetHead = 2;
-                else if (Input.GetKeyDown(KeyCode.Alpha4)) _colorTargetHead = 3;
+                if (Input.GetKeyDown(KeyCode.Alpha1)) RequestSelectHead(0);
+                else if (Input.GetKeyDown(KeyCode.Alpha2)) RequestSelectHead(1);
+                else if (Input.GetKeyDown(KeyCode.Alpha3)) RequestSelectHead(2);
+                else if (Input.GetKeyDown(KeyCode.Alpha4)) RequestSelectHead(3);
             }
 
             if (_colorTargetHead < 0) return;
 
-            int idx = FirstHeadIndex + _colorTargetHead;
-            var s = _states[idx];
-            bool changed = false;
-
-            if (Input.GetKeyDown(KeyCode.R)) { ApplyColor(ref s, PresetColors[0]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.G)) { ApplyColor(ref s, PresetColors[1]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.B)) { ApplyColor(ref s, PresetColors[2]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.M)) { ApplyColor(ref s, PresetColors[3]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.J)) { ApplyColor(ref s, PresetColors[4]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.C)) { ApplyColor(ref s, PresetColors[6]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.W)) { ApplyColor(ref s, PresetColors[7]); changed = true; }
-            else if (Input.GetKeyDown(KeyCode.Alpha0)) { ApplyColor(ref s, new Color32(0, 0, 0, 255)); changed = true; }
-
-            if (changed)
-                _states[idx] = s;
+            int head = _colorTargetHead;
+            if (Input.GetKeyDown(KeyCode.R)) RequestPresetColor(head, 0);
+            else if (Input.GetKeyDown(KeyCode.G)) RequestPresetColor(head, 1);
+            else if (Input.GetKeyDown(KeyCode.B)) RequestPresetColor(head, 2);
+            else if (Input.GetKeyDown(KeyCode.M)) RequestPresetColor(head, 3);
+            else if (Input.GetKeyDown(KeyCode.J)) RequestPresetColor(head, 4);
+            else if (Input.GetKeyDown(KeyCode.C)) RequestPresetColor(head, 6);
+            else if (Input.GetKeyDown(KeyCode.W)) RequestPresetColor(head, 7);
+            else if (Input.GetKeyDown(KeyCode.Alpha0)) RequestPresetColor(head, 999);
         }
 
         private void UpdateBeatEffects()
@@ -282,15 +518,18 @@ namespace Laps.Authoring
             for (int i = 0; i < HeadCount; i++)
             {
                 if (GUILayout.Button($"L{i + 1}"))
-                    ApplyColor(ref _states[FirstHeadIndex + i], PresetColors[(i * 2) % PresetColors.Length]);
+                    RequestPresetColor(i, (i * 2) % PresetColors.Length);
             }
-            if (GUILayout.Button("R")) SetAllHeadsColor(PresetColors[0]);
-            if (GUILayout.Button("V")) SetAllHeadsColor(PresetColors[1]);
-            if (GUILayout.Button("B")) SetAllHeadsColor(PresetColors[2]);
-            if (GUILayout.Button("Off")) SetAllHeadsColor(new Color32(0, 0, 0, 255));
+            if (GUILayout.Button("R")) RequestSetAllPreset(0);
+            if (GUILayout.Button("V")) RequestSetAllPreset(1);
+            if (GUILayout.Button("B")) RequestSetAllPreset(2);
+            if (GUILayout.Button("Off")) RequestSetAllPreset(999);
             GUILayout.EndHorizontal();
 
-            _beatColorCycle = GUILayout.Toggle(_beatColorCycle, "Couleurs au beat");
+            bool beatCycle = _beatColorCycle;
+            bool newBeatCycle = GUILayout.Toggle(beatCycle, "Couleurs au beat");
+            if (newBeatCycle != beatCycle)
+                RequestBeatColorCycle(newBeatCycle);
 
             int target = _colorTargetHead >= 0 ? _colorTargetHead : 0;
             int idxTarget = FirstHeadIndex + target;
@@ -303,9 +542,8 @@ namespace Laps.Authoring
             GUILayout.Label($"B{ts.color.b}", GUILayout.Width(36));
             float b = GUILayout.HorizontalSlider(ts.color.b, 0, 255);
             GUILayout.EndHorizontal();
-            ts.color = new Color32((byte)r, (byte)g, (byte)b, 255);
-            if (ts.dimmer < 80f && (r + g + b) > 3f) ts.dimmer = 255;
-            _states[idxTarget] = ts;
+            if (Mathf.RoundToInt(r) != ts.color.r || Mathf.RoundToInt(g) != ts.color.g || Mathf.RoundToInt(b) != ts.color.b)
+                RequestSetRgb(target, (byte)r, (byte)g, (byte)b);
 
             GUILayout.EndArea();
         }

@@ -34,6 +34,8 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     private StartMode _currentMode;
 
+    public StartMode CurrentMode => _currentMode;
+
     public enum StartMode
     {
         Timeline,     // Authoring classique via ShowTimeline
@@ -147,21 +149,21 @@ public class PixelHubBootstrapper : MonoBehaviour
         else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.Alpha0))
             RequestDebugColor(EHubDebugColor.BlackOut);
         else if (Input.GetKeyDown(KeyCode.F1))
-            TestMovingHead(1);
+            RequestTestMovingHead(1);
         else if (Input.GetKeyDown(KeyCode.F4))
-            TestMovingHead(4);
+            RequestTestMovingHead(4);
         else if (Input.GetKeyDown(KeyCode.Alpha6))
-            TestMovingHead(1);
+            RequestTestMovingHead(1);
         else if (Input.GetKeyDown(KeyCode.Alpha7))
-            TestMovingHead(2);
+            RequestTestMovingHead(2);
         else if (Input.GetKeyDown(KeyCode.Alpha8))
-            TestMovingHead(3);
+            RequestTestMovingHead(3);
         else if (Input.GetKeyDown(KeyCode.Alpha9))
-            TestMovingHead(4);
+            RequestTestMovingHead(4);
         else if (Input.GetKeyDown(KeyCode.P))
-            TestStaticProjector();
+            RequestTestStaticProjector();
         else if (Input.GetKeyDown(KeyCode.F5))
-            BlackOutLyres();
+            RequestBlackOutLyres();
     }
 
     /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
@@ -176,6 +178,45 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DebugColor, intArg = colorCode });
         ApplyDebugColor(colorCode);
+    }
+
+    public void RequestTestMovingHead(int headIndex)
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DeviceAction, intArg = headIndex });
+        TestMovingHead(headIndex);
+    }
+
+    public void RequestTestStaticProjector()
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DeviceAction, intArg = EHubDeviceAction.StaticProjector });
+        TestStaticProjector();
+    }
+
+    public void RequestBlackOutLyres()
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.DeviceAction, intArg = EHubDeviceAction.BlackOutLyres });
+        BlackOutLyres();
+    }
+
+    /// <summary>Appelé via eHub (autre poste) — sans republier sur le réseau.</summary>
+    public void ApplyDeviceAction(int actionCode)
+    {
+        switch (actionCode)
+        {
+            case EHubDeviceAction.MovingHead1:
+            case EHubDeviceAction.MovingHead2:
+            case EHubDeviceAction.MovingHead3:
+            case EHubDeviceAction.MovingHead4:
+                TestMovingHead(actionCode);
+                break;
+            case EHubDeviceAction.StaticProjector:
+                TestStaticProjector();
+                break;
+            case EHubDeviceAction.BlackOutLyres:
+                BlackOutLyres();
+                break;
+        }
+        RefreshDisplay();
     }
 
     /// <summary>Appelé localement ou via eHub (autre poste).</summary>
@@ -366,5 +407,36 @@ public class PixelHubBootstrapper : MonoBehaviour
     public void PlayShow()    => _showTimeline?.Play();
     public void PauseShow()   => _showTimeline?.Pause();
     public void StopShow()    => _showTimeline?.Stop();
+
+    public void RequestPlayShow()
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.TimelineControl, intArg = EHubTimelineAction.Play });
+        PlayShow();
+    }
+
+    public void RequestPauseShow()
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.TimelineControl, intArg = EHubTimelineAction.Pause });
+        PauseShow();
+    }
+
+    public void RequestStopShow()
+    {
+        EHubSyncBus.PublishLocal(new EHubMessage { type = EHubMessageTypes.TimelineControl, intArg = EHubTimelineAction.Stop });
+        StopShow();
+    }
+
+    public void ApplyTimelineControl(int action)
+    {
+        switch (action)
+        {
+            case EHubTimelineAction.Play: PlayShow(); break;
+            case EHubTimelineAction.Pause: PauseShow(); break;
+            case EHubTimelineAction.Stop: StopShow(); break;
+        }
+        RefreshDisplay();
+    }
+
+    public OtherDevicesPanel OtherDevices => _otherDevices;
     public void ReloadConfig() => _configManager?.LoadConfig();
 }
