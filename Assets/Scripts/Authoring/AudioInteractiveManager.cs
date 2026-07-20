@@ -79,6 +79,60 @@ namespace Laps.Authoring
         /// <summary>Déclenche un effet (son + VFX). Appelé localement ou depuis eHub.</summary>
         public void TriggerEffect(int mappingIndex, bool fromNetwork = false)
         {
+            // Cas particuliers pour les lance-flammes et autres effets rapides (sans prefab/SFX obligatoires)
+            if (mappingIndex == -99)
+            {
+                LedFireworks.Trigger(FireworkStyle.FlameThrowerLeft);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -99
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -98)
+            {
+                LedFireworks.Trigger(FireworkStyle.FlameThrowerRight);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -98
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -97)
+            {
+                LedFireworks.Trigger(FireworkStyle.LaserSweep);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -97
+                    });
+                }
+                return;
+            }
+            if (mappingIndex == -96)
+            {
+                LedFireworks.Trigger(FireworkStyle.Shockwave);
+                if (!fromNetwork)
+                {
+                    EHubSyncBus.PublishLocal(new EHubMessage
+                    {
+                        type = EHubMessageTypes.SfxTrigger,
+                        intArg = -96
+                    });
+                }
+                return;
+            }
+
             if (mappingIndex < 0 || mappingIndex >= soundMappings.Count) return;
 
             var mapping = soundMappings[mappingIndex];
@@ -88,13 +142,26 @@ namespace Laps.Authoring
 
             // 2. Feu d'artifice sur la grille LED (mur + aperçu), pas en 3D dans la scène
             FireworkStyle style = FireworkStyle.ClassicNova;
+            Color? customColor = null;
+            bool forceMulticolor = false;
+
             if (mapping.visualPrefab != null)
             {
                 var procedural = mapping.visualPrefab.GetComponent<ProceduralFirework>();
                 if (procedural != null)
+                {
                     style = procedural.style;
+                    if (!procedural.useRandomColor)
+                    {
+                        customColor = procedural.fireworkColor;
+                    }
+                    else
+                    {
+                        forceMulticolor = procedural.multicolor;
+                    }
+                }
             }
-            LedFireworks.Trigger(style);
+            LedFireworks.Trigger(style, customColor, forceMulticolor);
 
             if (!fromNetwork)
                 EHubSyncBus.PublishLocal(new EHubMessage
@@ -106,21 +173,44 @@ namespace Laps.Authoring
 
         private void HandleSoundEffects()
         {
+            // Déclenchement normal via mapping Inspector
             for (int i = 0; i < soundMappings.Count; i++)
             {
                 if (Input.GetKeyDown(soundMappings[i].key))
                     TriggerEffect(i, fromNetwork: false);
             }
+
+            // Raccourcis clavier directs pour tester les lance-flammes (gauche/droite)
+            if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.F))
+            {
+                TriggerEffect(-99, fromNetwork: false);
+            }
+            if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.H))
+            {
+                TriggerEffect(-98, fromNetwork: false);
+            }
+
+            // Raccourcis clavier directs pour tester le balayage laser (L)
+            if (Input.GetKeyDown(KeyCode.L))
+            {
+                TriggerEffect(-97, fromNetwork: false);
+            }
+
+            // Raccourcis clavier directs pour tester l'onde de choc (S)
+            if (Input.GetKeyDown(KeyCode.S))
+            {
+                TriggerEffect(-96, fromNetwork: false);
+            }
         }
 
         private void HandleVolumeControl()
         {
-            if (Input.GetKeyDown(KeyCode.PageUp))
+            if (Input.GetKeyDown(KeyCode.UpArrow))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume + volumeStep);
                 Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
             }
-            else if (Input.GetKeyDown(KeyCode.PageDown))
+            else if (Input.GetKeyDown(KeyCode.DownArrow))
             {
                 AudioListener.volume = Mathf.Clamp01(AudioListener.volume - volumeStep);
                 Debug.Log($"[Audio] Volume : {Mathf.RoundToInt(AudioListener.volume * 100)}%");
@@ -138,6 +228,7 @@ namespace Laps.Authoring
         {
             if (_isPaused == paused) return;
             _isPaused = paused;
+            GlobalPause.SetPaused(paused);
 
             if (paused)
             {
@@ -151,7 +242,10 @@ namespace Laps.Authoring
                         _director.Pause();
                 }
 
-                Debug.Log("[Pause] Tout en pause");
+                var video = FindObjectOfType<VideoOverlayRenderer>();
+                video?.SetPaused(true);
+
+                Debug.Log("[Pause] Tout en pause (audio + timeline + stickmen)");
             }
             else
             {
@@ -160,6 +254,9 @@ namespace Laps.Authoring
 
                 if (_director != null && _directorWasPlaying)
                     _director.Resume();
+
+                var video = FindObjectOfType<VideoOverlayRenderer>();
+                video?.SetPaused(false);
 
                 Debug.Log("[Pause] Lecture reprise");
             }

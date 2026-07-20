@@ -27,7 +27,7 @@ namespace Laps.Authoring
         [SerializeField] private AudioSource _audioSource;
         [Tooltip("Si aucun AudioSource n'est trouvé, analyse le mix global (AudioListener). Recommandé avec Timeline.")]
         [SerializeField] private bool _useAudioListenerWhenNoSource = true;
-        [Tooltip("Évite de relancer automatiquement l'AudioSource (sinon doublon possible avec Timeline/PlayableDirector).")]
+        [Tooltip("Relance l'AudioSource seulement s'il a un clip propre (pas via Timeline).")]
         [SerializeField] private bool _autoPlayAudioSource = false;
 
         [Header("Changement d'effets (show)")]
@@ -168,7 +168,9 @@ namespace Laps.Authoring
         public bool IsOnset { get; private set; }
         public bool IsVoiceActive => _voiceSmooth >= _voiceThreshold;
         public bool HasAudioSource => _audioSource != null;
-        public bool HasAudioInput => _audioSource != null || (_useAudioListenerWhenNoSource && AudioListener.pause == false);
+        public bool HasAudioInput =>
+            (_useAudioListenerWhenNoSource && !AudioListener.pause) ||
+            (_audioSource != null && _audioSource.isPlaying);
         public VisualEffect CurrentEffect => (_playIntroFirst && !_introFinished)
             ? VisualEffect.ContinentIntro
             : ((_effects != null && _effects.Length > 0)
@@ -272,23 +274,11 @@ namespace Laps.Authoring
             float bass = 0f;
             float high = 0f;
             float voice = 0f;
-            if (_audioSource != null)
-            {
-                if (_autoPlayAudioSource && !_audioSource.isPlaying && _audioSource.clip != null)
-                    _audioSource.Play();
+            bool gotSpectrum = false;
 
-                _audioSource.GetSpectrumData(_spectrum, 0, _fftWindow);
-                bass = ComputeBandAverage(_spectrum, _bassBinStart, _bassBinEnd) * _bassGain;
-                high = ComputeBandAverage(_spectrum, _highBinStart, _highBinEnd) * _highGain;
-                voice = ComputeBandAverage(_spectrum, _voiceBinStart, _voiceBinEnd) * _voiceGain;
-                // Réponse logarithmique : les valeurs FFT brutes sont souvent très faibles
-                bass = Mathf.Sqrt(bass);
-                high = Mathf.Sqrt(high);
-                voice = Mathf.Sqrt(voice);
-            }
-            else if (_useAudioListenerWhenNoSource && AudioListener.pause == false)
+            // La musique vient de la Timeline (une seule source). On analyse le mix global.
+            if (_useAudioListenerWhenNoSource && AudioListener.pause == false)
             {
-                // Timeline peut ne pas exposer facilement un AudioSource : on analyse le mix global
                 AudioListener.GetSpectrumData(_spectrum, 0, _fftWindow);
                 bass = ComputeBandAverage(_spectrum, _bassBinStart, _bassBinEnd) * _bassGain;
                 high = ComputeBandAverage(_spectrum, _highBinStart, _highBinEnd) * _highGain;
@@ -296,8 +286,28 @@ namespace Laps.Authoring
                 bass = Mathf.Sqrt(bass);
                 high = Mathf.Sqrt(high);
                 voice = Mathf.Sqrt(voice);
+                gotSpectrum = bass + high + voice > 0.0001f;
             }
-            else if (!_warnedNoAudio)
+
+            if (!gotSpectrum && _audioSource != null)
+            {
+                if (_autoPlayAudioSource && !_audioSource.isPlaying && _audioSource.clip != null)
+                    _audioSource.Play();
+
+                if (_audioSource.isPlaying)
+                {
+                    _audioSource.GetSpectrumData(_spectrum, 0, _fftWindow);
+                    bass = ComputeBandAverage(_spectrum, _bassBinStart, _bassBinEnd) * _bassGain;
+                    high = ComputeBandAverage(_spectrum, _highBinStart, _highBinEnd) * _highGain;
+                    voice = ComputeBandAverage(_spectrum, _voiceBinStart, _voiceBinEnd) * _voiceGain;
+                    bass = Mathf.Sqrt(bass);
+                    high = Mathf.Sqrt(high);
+                    voice = Mathf.Sqrt(voice);
+                    gotSpectrum = true;
+                }
+            }
+
+            if (!gotSpectrum && _audioSource == null && !_useAudioListenerWhenNoSource && !_warnedNoAudio)
             {
                 _warnedNoAudio = true;
                 Debug.LogWarning(
@@ -539,7 +549,6 @@ namespace Laps.Authoring
 
         private void TryFindAudioSource()
         {
-            // 1) PlayableDirector (Timeline) sur ShowDirector
             var director = FindObjectOfType<PlayableDirector>();
             if (director != null)
             {
@@ -551,7 +560,6 @@ namespace Laps.Authoring
                 }
             }
 
-            // 2) N'importe quel AudioSource en lecture
             var sources = FindObjectsByType<AudioSource>(FindObjectsSortMode.None);
             foreach (var s in sources)
             {

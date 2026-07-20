@@ -54,6 +54,12 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
+
+        // Vidéo overlay sur un GameObject séparé pour que GUI.depth fonctionne
+        // indépendamment des autres panneaux OnGUI
+        var videoOverlayGO = new GameObject("VideoOverlayRenderer");
+        videoOverlayGO.transform.SetParent(transform);
+        videoOverlayGO.AddComponent<Laps.Authoring.VideoOverlayRenderer>();
     }
 
     private void Start()
@@ -298,6 +304,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             var src = director.GetComponent<AudioSource>();
             if (src != null)
                 _audioReactive.SetAudioSource(src);
+            // Une seule source : la Timeline pilote l'AudioSource (pas de src.Play() en plus).
             if (director.state != PlayState.Playing)
                 director.Play();
         }

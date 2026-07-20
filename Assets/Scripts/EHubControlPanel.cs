@@ -30,6 +30,7 @@ public class EHubControlPanel : MonoBehaviour
             panelH += Mathf.Min(_audio.soundMappings.Count, 4) * 24 + 8;
 
         float x = margin;
+        // Réserve la zone projecteurs au-dessus (évite le chevauchement).
         float y = Screen.height - panelH - margin;
 
         GUI.Box(new Rect(x, y, panelW, panelH), "eHub — sync équipe");

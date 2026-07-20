@@ -266,52 +266,43 @@ namespace Laps.Authoring
             DrawSimulator();
             if (!_show) return;
 
-            const int w = 440;
-            const int h = 200;
-            var rect = new Rect(12, Screen.height - h - 12, w, h);
-            GUI.Box(rect, "Projecteurs — Flèches = pan/tilt | Ctrl+1..4 = lyre");
+            // Au-dessus du panneau eHub (bas-gauche) pour éviter le chevauchement.
+            const int eHubReserve = 148;
+            const int w = 360;
+            const int h = 158;
+            var rect = new Rect(12, Screen.height - eHubReserve - h - 16, w, h);
+            GUI.Box(rect, "Projecteurs — Flèches = pan/tilt | F2=masquer | Ctrl+1..4");
 
-            GUILayout.BeginArea(new Rect(rect.x + 10, rect.y + 24, rect.width - 20, rect.height - 34));
+            GUILayout.BeginArea(new Rect(rect.x + 8, rect.y + 22, rect.width - 16, rect.height - 28));
 
             string pauseLabel = GlobalPause.IsPaused ? " [PAUSE]" : "";
-            GUILayout.Label($"Lyre {_colorTargetHead + 1} | Flèches = rotation | F3 effets beat{pauseLabel}");
+            GUILayout.Label($"Lyre {_colorTargetHead + 1} | F3 effets beat{pauseLabel}");
 
             GUILayout.BeginHorizontal();
             for (int i = 0; i < HeadCount; i++)
             {
-                var s = _states[FirstHeadIndex + i];
-                if (GUILayout.Button($"Lyre {i + 1}"))
+                if (GUILayout.Button($"L{i + 1}"))
                     ApplyColor(ref _states[FirstHeadIndex + i], PresetColors[(i * 2) % PresetColors.Length]);
             }
+            if (GUILayout.Button("R")) SetAllHeadsColor(PresetColors[0]);
+            if (GUILayout.Button("V")) SetAllHeadsColor(PresetColors[1]);
+            if (GUILayout.Button("B")) SetAllHeadsColor(PresetColors[2]);
+            if (GUILayout.Button("Off")) SetAllHeadsColor(new Color32(0, 0, 0, 255));
             GUILayout.EndHorizontal();
 
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Tous Rouge")) SetAllHeadsColor(PresetColors[0]);
-            if (GUILayout.Button("Tous Vert")) SetAllHeadsColor(PresetColors[1]);
-            if (GUILayout.Button("Tous Bleu")) SetAllHeadsColor(PresetColors[2]);
-            if (GUILayout.Button("Tous Off")) SetAllHeadsColor(new Color32(0, 0, 0, 255));
-            GUILayout.EndHorizontal();
+            _beatColorCycle = GUILayout.Toggle(_beatColorCycle, "Couleurs au beat");
 
-            GUILayout.Space(6);
-            GUILayout.BeginHorizontal();
-            _beatColorCycle = GUILayout.Toggle(_beatColorCycle, "Couleurs qui changent au beat");
-            GUILayout.EndHorizontal();
-
-            // Sliders couleur (pour faire varier précisément, sans casser les mouvements)
-            GUILayout.Space(4);
             int target = _colorTargetHead >= 0 ? _colorTargetHead : 0;
             int idxTarget = FirstHeadIndex + target;
             var ts = _states[idxTarget];
-            GUILayout.Label($"Sliders couleur — Lyre {target + 1} (Ctrl+{target + 1} pour changer la cible)");
-            float r = ts.color.r;
-            float g = ts.color.g;
-            float b = ts.color.b;
-            GUILayout.Label($"R {Mathf.RoundToInt(r)}");
-            r = GUILayout.HorizontalSlider(r, 0, 255);
-            GUILayout.Label($"G {Mathf.RoundToInt(g)}");
-            g = GUILayout.HorizontalSlider(g, 0, 255);
-            GUILayout.Label($"B {Mathf.RoundToInt(b)}");
-            b = GUILayout.HorizontalSlider(b, 0, 255);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"R{ts.color.r}", GUILayout.Width(36));
+            float r = GUILayout.HorizontalSlider(ts.color.r, 0, 255);
+            GUILayout.Label($"G{ts.color.g}", GUILayout.Width(36));
+            float g = GUILayout.HorizontalSlider(ts.color.g, 0, 255);
+            GUILayout.Label($"B{ts.color.b}", GUILayout.Width(36));
+            float b = GUILayout.HorizontalSlider(ts.color.b, 0, 255);
+            GUILayout.EndHorizontal();
             ts.color = new Color32((byte)r, (byte)g, (byte)b, 255);
             if (ts.dimmer < 80f && (r + g + b) > 3f) ts.dimmer = 255;
             _states[idxTarget] = ts;
@@ -331,13 +322,15 @@ namespace Laps.Authoring
 
         private void DrawSimulator()
         {
-            const int size = 54;
-            const int gap = 12;
+            const int size = 48;
+            const int gap = 10;
+            // Sous l'aperçu LED (haut-droite), bien séparé des autres panneaux.
+            const int previewMax = 420;
             int totalW = HeadCount * size + (HeadCount - 1) * gap;
             float x0 = Screen.width - totalW - 16f;
-            float y0 = 16f;
+            float y0 = 10f + 28f + previewMax + 10f;
 
-            GUI.Box(new Rect(x0 - 8, y0 - 8, totalW + 16, size + 56), "Simulateur lyres");
+            GUI.Box(new Rect(x0 - 8, y0 - 8, totalW + 16, size + 48), "Simulateur lyres");
 
             for (int i = 0; i < HeadCount; i++)
             {
@@ -349,21 +342,19 @@ namespace Laps.Authoring
                 GUI.color = bg;
                 GUI.DrawTexture(r, Texture2D.whiteTexture);
 
-                // Faisceau (couleur lyre)
                 GUI.color = new Color(s.color.r / 255f, s.color.g / 255f, s.color.b / 255f, s.dimmer / 255f);
-                var beam = new Rect(r.x + 14, r.y + 14, 26, 26);
+                var beam = new Rect(r.x + 12, r.y + 12, 24, 24);
                 GUI.DrawTexture(beam, Texture2D.whiteTexture);
 
-                // Indicateur pan (rotation)
                 float ang = (s.pan / 255f) * Mathf.PI * 2f;
                 float cx = r.x + r.width * 0.5f;
                 float cy = r.y + r.height * 0.5f;
-                float lx = cx + Mathf.Cos(ang) * 18f;
-                float ly = cy + Mathf.Sin(ang) * 18f;
+                float lx = cx + Mathf.Cos(ang) * 16f;
+                float ly = cy + Mathf.Sin(ang) * 16f;
                 DrawLine(new Vector2(cx, cy), new Vector2(lx, ly), 2f, Color.white);
 
                 GUI.color = Color.white;
-                GUI.Label(new Rect(x, y0 + size + 10, size, 18), $"L{i + 1}", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10 });
+                GUI.Label(new Rect(x, y0 + size + 8, size, 18), $"L{i + 1}", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10 });
             }
 
             GUI.color = Color.white;
