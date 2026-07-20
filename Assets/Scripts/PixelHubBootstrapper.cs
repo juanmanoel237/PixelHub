@@ -121,6 +121,8 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     private void Update()
     {
+        bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
         if (Input.GetKeyDown(KeyCode.T))
             RequestSwitchMode(StartMode.Timeline);
         else if (Input.GetKeyDown(KeyCode.D))
@@ -131,7 +133,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestSwitchMode(StartMode.Manual);
         else if (Input.GetKeyDown(KeyCode.V))
             RequestSwitchMode(StartMode.VideoCapture);
-        else if (Input.GetKeyDown(KeyCode.Alpha1))
+        else if (!ctrlHeld && Input.GetKeyDown(KeyCode.Alpha1))
             RequestDebugColor(EHubDebugColor.FirstLed);
         else if (Input.GetKeyDown(KeyCode.R))
             RequestDebugColor(EHubDebugColor.Red);
@@ -139,7 +141,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestDebugColor(EHubDebugColor.Green);
         else if (Input.GetKeyDown(KeyCode.B))
             RequestDebugColor(EHubDebugColor.Blue);
-        else if (Input.GetKeyDown(KeyCode.Alpha0))
+        else if (!ctrlHeld && Input.GetKeyDown(KeyCode.Alpha0))
             RequestDebugColor(EHubDebugColor.BlackOut);
         else if (Input.GetKeyDown(KeyCode.F1))
             TestMovingHead(1);

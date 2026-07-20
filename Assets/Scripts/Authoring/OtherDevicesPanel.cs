@@ -5,8 +5,8 @@ namespace Laps.Authoring
 {
     /// <summary>
     /// Pilotage des projecteurs DMX (mur LAPS) + simulateur visuel.
-    /// - Rotation uniquement via les flèches (pan/tilt manuel)
-    /// - Option F3 : effets lumière au beat (sans rotation auto)
+    /// - Rotation via flèches (pan/tilt manuel)
+    /// - Option F3 : effets lumière + rotation auto "spectacle" sur la musique
     /// </summary>
     public class OtherDevicesPanel : MonoBehaviour, ILyreStateProvider
     {
@@ -21,6 +21,11 @@ namespace Laps.Authoring
         [SerializeField] private float _beatStrobeDuration = 0.12f;
         [SerializeField] private bool _beatColorCycle = true;
         [SerializeField, Range(0f, 1f)] private float _beatHueStep = 0.06f;
+        [SerializeField] private bool _autoRotateOnBeat = true;
+        [SerializeField, Range(10f, 127f)] private float _autoPanAmplitude = 84f;
+        [SerializeField, Range(6f, 90f)] private float _autoTiltAmplitude = 34f;
+        [SerializeField, Range(0.2f, 2f)] private float _autoSpeedMin = 0.6f;
+        [SerializeField, Range(0.5f, 4f)] private float _autoSpeedMax = 2.2f;
 
         [Header("Contrôle manuel (flèches)")]
         [SerializeField] private float _arrowPanSpeed = 120f;
@@ -161,10 +166,10 @@ namespace Laps.Authoring
         {
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1)) _colorTargetHead = 0;
-                else if (Input.GetKeyDown(KeyCode.Alpha2)) _colorTargetHead = 1;
-                else if (Input.GetKeyDown(KeyCode.Alpha3)) _colorTargetHead = 2;
-                else if (Input.GetKeyDown(KeyCode.Alpha4)) _colorTargetHead = 3;
+                if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) _colorTargetHead = 0;
+                else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) _colorTargetHead = 1;
+                else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) _colorTargetHead = 2;
+                else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4)) _colorTargetHead = 3;
             }
 
             if (_colorTargetHead < 0) return;
@@ -203,7 +208,18 @@ namespace Laps.Authoring
                 int idx = FirstHeadIndex + i;
                 var s = _states[idx];
 
-                // Pan/tilt : uniquement les flèches, jamais modifié ici
+                // Rotation auto "spectacle" synchronisée sur l'intensité (si F3 actif)
+                if (_autoRotateOnBeat)
+                {
+                    float energy = Mathf.Clamp01(bass + (beat ? 0.25f : 0f));
+                    float speed = Mathf.Lerp(_autoSpeedMin, _autoSpeedMax, energy);
+                    float phase = i * 1.35f;
+                    float panAmp = _autoPanAmplitude * (0.65f + 0.35f * energy);
+                    float tiltAmp = _autoTiltAmplitude * (0.6f + 0.4f * energy);
+                    s.pan = Mathf.Clamp(128f + Mathf.Sin(Time.time * speed + phase) * panAmp, 0f, 255f);
+                    s.tilt = Mathf.Clamp(128f + Mathf.Cos(Time.time * (speed * 0.8f) + phase * 1.15f) * tiltAmp, 0f, 255f);
+                }
+
                 s.dimmer = Mathf.Clamp(200f + bass * 55f + (beat ? 55f : 0f), 0f, 255f);
                 s.strobe = strobeActive;
 
