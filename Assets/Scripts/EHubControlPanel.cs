@@ -67,12 +67,12 @@ public class EHubControlPanel : MonoBehaviour
     {
         if (_eHub == null || !_eHub.IsConnected)
         {
-            int h = 210;
-            if (!string.IsNullOrEmpty(_eHub?.DiscoveredHostIp)) h += 46;
-            if (_eHub != null && _eHub.IsClientConnecting) h += 24;
-            if (!string.IsNullOrEmpty(_eHub?.LastConnectionError)) h += 36;
-            if (_eHub?.LocalIpCandidates != null && _eHub.LocalIpCandidates.Count > 1) h += 18;
-            return h;
+            int disconnectedH = 210;
+            if (!string.IsNullOrEmpty(_eHub?.DiscoveredHostIp)) disconnectedH += 46;
+            if (_eHub != null && _eHub.IsClientConnecting) disconnectedH += 24;
+            if (!string.IsNullOrEmpty(_eHub?.LastConnectionError)) disconnectedH += 36;
+            if (_eHub?.LocalIpCandidates != null && _eHub.LocalIpCandidates.Count > 1) disconnectedH += 18;
+            return disconnectedH;
         }
 
         int h = 420;

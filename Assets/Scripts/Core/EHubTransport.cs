@@ -69,19 +69,10 @@ namespace Laps.Core
         public string ActivePeersLabel => _role == EHubRole.Host ? FormatClientList() : (_role == EHubRole.Client ? $"hôte {_hostIp}" : "—");
         public string PeersConfigLabel => _role == EHubRole.Host ? $"{ConnectedClientCount} client(s)" : HostIp;
 
-        /// <summary>Déclenché côté hôte quand un client envoie Hello.</summary>
         public event Action<string> ClientJoined;
-
-        /// <summary>Déclenché côté client quand l'hôte répond HelloAck.</summary>
         public event Action ClientLinked;
-
-        /// <summary>Connexion client échouée (timeout).</summary>
         public event Action<string> ClientLinkFailed;
-
-        /// <summary>Hôte découvert sur le LAN (beacon).</summary>
         public event Action<string> HostDiscovered;
-
-        /// <summary>Autre hôte détecté alors que nous sommes déjà hôte.</summary>
         public event Action<string> HostConflictDetected;
 
         public string DiscoveredHostIp { get; private set; }
@@ -137,14 +128,12 @@ namespace Laps.Core
             Debug.Log($"[eHub] Connexion à l'hôte {_hostIp}:{_port}…");
         }
 
-        /// <summary>Écoute les annonces d'hôte sur le LAN (mode solo, avant connexion).</summary>
         public void StartDiscoveryListen()
         {
             if (_role != EHubRole.Solo || _running) return;
             StartListener();
         }
 
-        /// <summary>À appeler depuis le main thread (timeouts connexion client).</summary>
         public void Tick()
         {
             if (_role != EHubRole.Client || _clientLinkState != EHubClientLinkState.Connecting) return;
@@ -274,7 +263,6 @@ namespace Laps.Core
 
         private void HandleHostBeacon(string remoteIp, EHubMessage msg)
         {
-            // L'IP source du paquet UDP est fiable ; stringArg peut être une mauvaise interface locale.
             string hostIp = remoteIp;
             if (string.IsNullOrEmpty(hostIp)) return;
 
@@ -300,7 +288,6 @@ namespace Laps.Core
             }
         }
 
-        /// <summary>Annonce périodique de l'hôte sur le LAN (découverte automatique).</summary>
         public void SendHostBeacon()
         {
             if (_role != EHubRole.Host || _sender == null) return;
@@ -325,7 +312,6 @@ namespace Laps.Core
                 Debug.LogWarning($"[eHub] Beacon broadcast échoué : {e.Message}");
             }
 
-            // Unicast vers sous-réseau local en secours si le broadcast est filtré par le Wi-Fi.
             foreach (string ip in EHubNetworkUtil.CollectLanCandidates())
             {
                 if (EHubNetworkUtil.IpEquals(ip, _localIp)) continue;
@@ -342,7 +328,6 @@ namespace Laps.Core
         {
             if (_role != EHubRole.Host) return;
 
-            // Toujours répondre à l'IP source UDP (chemin retour garanti).
             string clientIp = remoteIp;
             bool isNewClient = !_connectedClients.ContainsKey(clientIp) ||
                                NowMs() - _connectedClients[clientIp] >= 8000;

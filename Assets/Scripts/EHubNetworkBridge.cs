@@ -1,5 +1,5 @@
-using System.Net;
 using System.Collections.Generic;
+using System.Net;
 using UnityEngine;
 using Laps.Core;
 using Laps.Authoring;
@@ -62,7 +62,6 @@ public class EHubNetworkBridge : MonoBehaviour
         _transport?.Dispose();
     }
 
-    /// <summary>Une personne de l'équipe clique « Je suis l'hôte ».</summary>
     public void StartAsHost()
     {
         if (!_syncEnabled) return;
@@ -77,7 +76,6 @@ public class EHubNetworkBridge : MonoBehaviour
         Debug.Log("[eHub] Vous pilotez le mur LED — les clients envoient des commandes uniquement.");
     }
 
-    /// <summary>Les autres membres saisissent l'IP de l'hôte et cliquent « Connecter ».</summary>
     public void ConnectToHost(string hostIp)
     {
         if (!_syncEnabled || string.IsNullOrWhiteSpace(hostIp)) return;
@@ -105,14 +103,12 @@ public class EHubNetworkBridge : MonoBehaviour
         _transport.ConnectToHost(hostIp);
     }
 
-    /// <summary>Utilise l'hôte découvert automatiquement sur le Wi-Fi.</summary>
     public void ConnectToDiscoveredHost()
     {
         if (string.IsNullOrEmpty(DiscoveredHostIp)) return;
         ConnectToHost(DiscoveredHostIp);
     }
 
-    /// <summary>Quitte la session hôte/client et repasse en mode solo.</summary>
     public void Disconnect()
     {
         UnsubscribeTransportEvents();
