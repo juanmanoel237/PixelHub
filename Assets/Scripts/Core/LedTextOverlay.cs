@@ -66,7 +66,8 @@ namespace Laps.Core
         };
 
         private const float FLIGHT_DURATION = 1.8f;
-        private const int LETTER_SCALE = 7;
+        // La taille des lettres volantes (réduite pour qu'elles prennent moins de place)
+        private const int LETTER_SCALE = 4;
 
         /// <summary>Lance une lettre volante sur la grille.</summary>
         public static void SpawnLetter(char ch)
@@ -199,7 +200,8 @@ namespace Laps.Core
 
                     for (int sy = 0; sy < scale; sy++)
                     {
-                        int py = oy + row * scale + sy;
+                        // Unity commence Y=0 en bas. On inverse la ligne (6 - row) pour ne pas avoir la tête en bas.
+                        int py = oy + (6 - row) * scale + sy;
                         if (py < 0 || py >= h) continue;
 
                         for (int sx = 0; sx < scale; sx++)

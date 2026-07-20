@@ -369,7 +369,8 @@ namespace Laps.Authoring
                     if ((bits & (1 << (FONT_W - 1 - col))) == 0) continue;
                     for (int sy = 0; sy < scale; sy++)
                     {
-                        int py = originY + row * scale + sy;
+                        // Inversion verticale (Y=0 est en bas dans Unity)
+                        int py = originY + (6 - row) * scale + sy;
                         if (py < 0 || py >= h) continue;
                         for (int sx = 0; sx < scale; sx++)
                         {
@@ -451,7 +452,8 @@ namespace Laps.Authoring
 
                         for (int sy = 0; sy < scale; sy++)
                         {
-                            int py = originY + row * scale + sy;
+                            // Inversion verticale
+                            int py = originY + (6 - row) * scale + sy;
                             if (py < 0 || py >= h) continue;
 
                             for (int sx = 0; sx < scale; sx++)
