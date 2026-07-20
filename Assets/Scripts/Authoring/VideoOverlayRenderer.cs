@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Video;
+using Laps.Core;
 
 namespace Laps.Authoring
 {
@@ -7,14 +9,21 @@ namespace Laps.Authoring
     /// Gère le VideoPlayer pour la vidéo de combat overlay et expose la RenderTexture
     /// + un Material luma-key pour que LedPreviewOverlay puisse la dessiner
     /// dans le cadre Aperçu LEDs avec fond transparent.
+    /// Alimente VideoOverlayCompositor pour envoyer les stickmen au mur LED.
     /// </summary>
     public class VideoOverlayRenderer : MonoBehaviour
     {
+        public static VideoOverlayRenderer Instance { get; private set; }
+
         private VideoPlayer _videoPlayer;
         private RenderTexture _videoRT;
         private Material _lumaKeyMat;
         private bool _videoReady;
         private bool _paused;
+        private bool _readbackPending;
+        private Color32[] _pixelBuffer;
+        private int _pixelWidth;
+        private int _pixelHeight;
 
         /// <summary>La RenderTexture de la vidéo, null tant qu'elle n'est pas prête.</summary>
         public RenderTexture VideoTexture => _videoReady ? _videoRT : null;
@@ -24,6 +33,8 @@ namespace Laps.Authoring
 
         private void Awake()
         {
+            Instance = this;
+
             var shader = Shader.Find("Hidden/VideoLumaKey");
             if (shader != null)
             {
@@ -41,8 +52,35 @@ namespace Laps.Authoring
 
         private void OnDestroy()
         {
+            if (Instance == this) Instance = null;
+            VideoOverlayCompositor.ClearFrame();
             CleanupVideo();
             if (_lumaKeyMat != null) Destroy(_lumaKeyMat);
+        }
+
+        private void Update()
+        {
+            if (!_videoReady || _paused || _videoRT == null || _readbackPending) return;
+
+            _readbackPending = true;
+            AsyncGPUReadback.Request(_videoRT, 0, TextureFormat.RGBA32, OnReadbackComplete);
+        }
+
+        private void OnReadbackComplete(AsyncGPUReadbackRequest request)
+        {
+            _readbackPending = false;
+            if (request.hasError || !_videoReady) return;
+
+            var data = request.GetData<Color32>();
+            if (_pixelBuffer == null || _pixelBuffer.Length != data.Length)
+            {
+                _pixelWidth = _videoRT != null ? _videoRT.width : 0;
+                _pixelHeight = _videoRT != null ? _videoRT.height : 0;
+                _pixelBuffer = new Color32[data.Length];
+            }
+
+            data.CopyTo(_pixelBuffer);
+            VideoOverlayCompositor.SetFrame(_pixelBuffer, _pixelWidth, _pixelHeight);
         }
 
         /// <summary>Pause / reprise synchronisée avec Espace (et eHub).</summary>

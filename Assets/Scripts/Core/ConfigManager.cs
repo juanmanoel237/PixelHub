@@ -58,6 +58,8 @@ namespace Laps.Core
         public string pixelOrder;   // "RGB" ou "RGBW" ou "GRB" etc.
         public int channelsPerLed;  // 3 ou 4
         public bool serpentine;     // true = lignes impaires câblées de droite à gauche
+        public bool flipY;          // true = inverse haut/bas pour le mur physique
+        public bool flipX;          // true = inverse gauche/droite pour le mur physique
         public StripConfig[] strips;
         public LyreConfig[] lyres;
     }
@@ -241,6 +243,8 @@ namespace Laps.Core
                     pixelOrder     = "RGB",
                     channelsPerLed = 3,
                     serpentine     = false,
+                    flipY          = true,
+                    flipX          = false,
                     strips         = new StripConfig[0],
                     lyres          = new LyreConfig[0]
                 },

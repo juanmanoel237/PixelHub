@@ -104,8 +104,8 @@ namespace Laps.Authoring
 
             int pixelCount = Mathf.Min(state.Length, _screenWidth * _screenHeight);
             var pixels = new Color[pixelCount];
-            for (int i = 0; i < pixelCount; i++)
-                pixels[i] = state[i];
+            // SetPixels commence en bas à gauche : flip Y pour l'affichage GUI.
+            LedBufferTransforms.CopyToTexturePixels(state, pixels, _screenWidth, _screenHeight, flipY: true, flipX: false);
 
             _previewTexture.SetPixels(pixels);
             _previewTexture.Apply();
@@ -224,41 +224,12 @@ namespace Laps.Authoring
             if (_previewTexture != null)
             {
                 int x = Screen.width - previewW - margin;
-                GUI.Box(new Rect(x - 4, margin - 4, previewW + 8, previewH + 28), "Aperçu LEDs (simulation)");
+                var map = ConfigManager.Config?.mapping;
+                string orient = map != null ? $"Y={(map.flipY ? "flip" : "—")} X={(map.flipX ? "flip" : "—")}" : "";
+                GUI.Box(new Rect(x - 4, margin - 4, previewW + 8, previewH + 28), $"Aperçu LEDs ({orient})");
                 GUI.DrawTexture(new Rect(x, margin + 18, previewW, previewH), _previewTexture, ScaleMode.ScaleToFit);
 
-                // Vidéo combat (stickmen) par-dessus les LEDs (luma-key).
-                if (_showCombatOverlay)
-                {
-                    if (_videoOverlay == null)
-                        _videoOverlay = FindObjectOfType<VideoOverlayRenderer>();
-
-                    var videoTex = _videoOverlay != null ? _videoOverlay.VideoTexture : null;
-                    var lumaMat  = _videoOverlay != null ? _videoOverlay.LumaKeyMaterial : null;
-                    if (videoTex != null)
-                    {
-                        float previewX = x;
-                        float previewY = margin + 18;
-
-                        float videoAspect = (float)videoTex.width / Mathf.Max(1, videoTex.height);
-                        float vidW = previewW;
-                        float vidH = vidW / videoAspect;
-                        if (vidH > previewH)
-                        {
-                            vidH = previewH;
-                            vidW = vidH * videoAspect;
-                        }
-                        float vidX = previewX + (previewW - vidW) * 0.5f;
-                        float vidY = previewY + previewH - vidH;
-
-                        var vidRect = new Rect(vidX, vidY, vidW, vidH);
-
-                        if (lumaMat != null)
-                            Graphics.DrawTexture(vidRect, videoTex, lumaMat);
-                        else
-                            GUI.DrawTexture(vidRect, videoTex, ScaleMode.ScaleToFit);
-                    }
-                }
+                // Stickmen déjà composés dans le buffer routé (VideoOverlayCompositor).
             }
 
             GUI.Label(new Rect(margin, Screen.height - 22, Screen.width - margin * 2, 20),

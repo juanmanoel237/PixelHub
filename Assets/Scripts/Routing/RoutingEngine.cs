@@ -158,14 +158,13 @@ namespace Laps.Routing
                     var map = ConfigManager.Config?.mapping;
                     if (map != null)
                     {
-                        LedFireworks.CompositeOnto(
-                            _writeBuffer,
-                            map.screenWidth > 0 ? map.screenWidth : 128,
-                            map.screenHeight > 0 ? map.screenHeight : 128);
-                        LedTextOverlay.CompositeOnto(
-                            _writeBuffer,
-                            map.screenWidth > 0 ? map.screenWidth : 128,
-                            map.screenHeight > 0 ? map.screenHeight : 128);
+                        int w = map.screenWidth > 0 ? map.screenWidth : 128;
+                        int h = map.screenHeight > 0 ? map.screenHeight : 128;
+                        LedFireworks.CompositeOnto(_writeBuffer, w, h);
+                        LedTextOverlay.CompositeOnto(_writeBuffer, w, h);
+                        VideoOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        if (map.flipY) LedBufferTransforms.FlipBufferY(_writeBuffer, w, h);
+                        if (map.flipX) LedBufferTransforms.FlipBufferX(_writeBuffer, w, h);
                     }
 
                     Color32[] tmp = _readBuffer;

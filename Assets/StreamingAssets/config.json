@@ -37,6 +37,8 @@
     "pixelOrder": "RGB",
     "channelsPerLed": 3,
     "serpentine": false,
+    "flipY": false,
+    "flipX": false,
     "strips": [],
     "lyres": [
       {

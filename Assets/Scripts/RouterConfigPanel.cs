@@ -50,7 +50,7 @@ public class RouterConfigPanel : MonoBehaviour
 
         const int panelW = 300;
         const int margin = 10;
-        int panelH = 280 + (ConfigManager.Config?.network?.controllers?.Length ?? 0) * 22;
+        int panelH = 340 + (ConfigManager.Config?.network?.controllers?.Length ?? 0) * 22;
         float x = Screen.width - panelW - margin;
         float y = margin + 10;
 
@@ -63,6 +63,8 @@ public class RouterConfigPanel : MonoBehaviour
         DrawStatus(innerX, ref lineY, innerW);
         lineY += 6;
         DrawIpFields(innerX, ref lineY, innerW);
+        lineY += 8;
+        DrawOrientationToggles(innerX, ref lineY, innerW);
         lineY += 8;
         DrawButtons(innerX, ref lineY, innerW);
 
@@ -118,6 +120,28 @@ public class RouterConfigPanel : MonoBehaviour
             GUI.Label(new Rect(x, y, 72, 20), $"#{i + 1} (U{c.startUniverse}+)");
             _ipFields[i] = GUI.TextField(new Rect(x + 76, y, w - 76, 20), _ipFields[i]);
             y += 24;
+        }
+    }
+
+    private void DrawOrientationToggles(float x, ref float y, float w)
+    {
+        var cfg = ConfigManager.Config?.mapping;
+        if (cfg == null) return;
+
+        GUI.Label(new Rect(x, y, w, 18), "Orientation mur (test en direct) :");
+        y += 20;
+
+        float half = (w - 6) * 0.5f;
+        bool newFlipY = GUI.Toggle(new Rect(x, y, half, 22), cfg.flipY, "Flip Y (haut/bas)");
+        bool newFlipX = GUI.Toggle(new Rect(x + half + 6, y, half, 22), cfg.flipX, "Flip X (gauche/droite)");
+        y += 26;
+
+        if (newFlipY != cfg.flipY || newFlipX != cfg.flipX)
+        {
+            cfg.flipY = newFlipY;
+            cfg.flipX = newFlipX;
+            _configManager?.SaveConfig();
+            ShowFeedback($"Orientation → flipY={cfg.flipY}, flipX={cfg.flipX}");
         }
     }
 
