@@ -33,6 +33,7 @@ namespace Laps.Core
         public const string VolumeSet = "VolumeSet";
         public const string TimelineControl = "TimelineControl";
         public const string DanmarkLetter = "DanmarkLetter";
+        public const string HostBeacon = "HostBeacon";
     }
 
     /// <summary>Sous-actions LyreControl (intArg).</summary>

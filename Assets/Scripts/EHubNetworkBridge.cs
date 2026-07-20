@@ -5,8 +5,8 @@ using Laps.Authoring;
 
 /// <summary>
 /// Relie le transport eHub UDP aux actions du show.
-/// Mode Hôte : les autres saisissent votre IP.
-/// Mode Client : saisir l'IP de l'hôte puis « Connecter ».
+/// Mode Hôte : seul poste qui envoie Art-Net vers le mur LED.
+/// Mode Client : télécommande — commandes sync vers l'hôte, aperçu local uniquement.
 /// </summary>
 public class EHubNetworkBridge : MonoBehaviour
 {
@@ -19,6 +19,7 @@ public class EHubNetworkBridge : MonoBehaviour
     private DanmarkKeyEffect _danmark;
     private bool _applyingRemote;
     private float _helloTimer;
+    private float _beaconTimer;
 
     public bool IsEnabled => _syncEnabled;
     public bool IsConnected => _transport != null && _transport.IsConnected;
@@ -28,10 +29,12 @@ public class EHubNetworkBridge : MonoBehaviour
     public string SessionId => ConfigManager.Config?.network?.eHubSessionId ?? "—";
     public string LocalIp => _transport?.LocalIp ?? ResolveLocalIpFallback();
     public string HostIp => _transport?.HostIp ?? "";
+    public string DiscoveredHostIp => _transport?.DiscoveredHostIp ?? "";
     public int Port => ConfigManager.Config?.network?.eHubPort ?? 9000;
     public string PeersConfigLabel => _transport?.PeersConfigLabel ?? "—";
     public string ActivePeersLabel => _transport?.ActivePeersLabel ?? "—";
     public int TotalPostes => _transport?.TotalPostes ?? 1;
+    public bool IsHardwareOutputEnabled => EHubStatus.ShouldOutputToHardware;
 
     private void Awake()
     {
@@ -46,6 +49,7 @@ public class EHubNetworkBridge : MonoBehaviour
         if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
         EHubSyncBus.RegisterSendHandler(msg => Send(msg));
         EHubStatus.Update(true, false, EHubRole.Solo, "", 1);
+        StartDiscovery();
     }
 
     private void OnDestroy()
@@ -64,6 +68,9 @@ public class EHubNetworkBridge : MonoBehaviour
 
         ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
         _transport.StartAsHost();
+        EHubStatus.HostDetectedOnLan = false;
+        _transport.SendHostBeacon();
+        Debug.Log("[eHub] Vous pilotez le mur LED — les clients envoient des commandes uniquement.");
     }
 
     /// <summary>Les autres membres saisissent l'IP de l'hôte et cliquent « Connecter ».</summary>
@@ -88,6 +95,13 @@ public class EHubNetworkBridge : MonoBehaviour
         _transport.ConnectToHost(hostIp);
     }
 
+    /// <summary>Utilise l'hôte découvert automatiquement sur le Wi-Fi.</summary>
+    public void ConnectToDiscoveredHost()
+    {
+        if (string.IsNullOrEmpty(DiscoveredHostIp)) return;
+        ConnectToHost(DiscoveredHostIp);
+    }
+
     /// <summary>Quitte la session hôte/client et repasse en mode solo.</summary>
     public void Disconnect()
     {
@@ -95,11 +109,24 @@ public class EHubNetworkBridge : MonoBehaviour
         _transport?.Dispose();
         _transport = null;
         _helloTimer = 0f;
+        _beaconTimer = 0f;
         EHubStatus.Update(_syncEnabled, false, EHubRole.Solo, "", 1);
+        EHubStatus.HostDetectedOnLan = false;
         Debug.Log("[eHub] Déconnecté — contrôle distant désactivé.");
+        StartDiscovery();
     }
 
     public static string GetSavedHostIp() => PlayerPrefs.GetString("eHub.lastHostIp", "");
+
+    private void StartDiscovery()
+    {
+        if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
+        if (_transport != null && _transport.IsConnected) return;
+
+        var net = ConfigManager.Config.network;
+        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        _transport.StartDiscoveryListen();
+    }
 
     private void ReplaceTransport(EHubTransport transport)
     {
@@ -114,6 +141,8 @@ public class EHubNetworkBridge : MonoBehaviour
         if (_transport == null) return;
         _transport.ClientJoined += OnClientJoined;
         _transport.ClientLinked += OnClientLinked;
+        _transport.HostDiscovered += OnHostDiscovered;
+        _transport.HostConflictDetected += OnHostConflictDetected;
     }
 
     private void UnsubscribeTransportEvents()
@@ -121,29 +150,48 @@ public class EHubNetworkBridge : MonoBehaviour
         if (_transport == null) return;
         _transport.ClientJoined -= OnClientJoined;
         _transport.ClientLinked -= OnClientLinked;
+        _transport.HostDiscovered -= OnHostDiscovered;
+        _transport.HostConflictDetected -= OnHostConflictDetected;
     }
 
     private void OnClientJoined(string clientIp)
     {
         if (_transport == null || _transport.Role != EHubRole.Host) return;
         PushFullStateTo(clientIp);
-        Debug.Log($"[eHub] Client connecté ({clientIp}) — état du show envoyé.");
+        Debug.Log($"[eHub] Client connecté ({clientIp}) — état complet synchronisé.");
     }
 
     private void OnClientLinked()
     {
-        Debug.Log("[eHub] Connecté à l'hôte — vous voyez le même état et pouvez contrôler le show.");
+        Debug.Log("[eHub] Connecté à l'hôte — télécommande active. Le mur LED reste piloté par l'hôte.");
+    }
+
+    private void OnHostDiscovered(string hostIp)
+    {
+        EHubStatus.HostDetectedOnLan = true;
+        Debug.Log($"[eHub] Hôte détecté sur le réseau : {hostIp} — connectez-vous en CLIENT.");
+    }
+
+    private void OnHostConflictDetected(string otherHostIp)
+    {
+        Debug.LogWarning(
+            $"[eHub] CONFLIT — un autre hôte ({otherHostIp}) est actif sur le même réseau. " +
+            "Un seul poste doit être hôte pour éviter les artefacts sur le mur LED.");
     }
 
     private void PushFullStateTo(string clientIp)
     {
         if (_transport == null || _bootstrap == null) return;
 
+        _bootstrap.GetTimelineSyncState(out int timelineState, out float timelineTime);
+
         _transport.SendToPeer(new EHubMessage
         {
             type = EHubMessageTypes.StateSync,
             intArg = (int)_bootstrap.CurrentMode,
-            floatArg = (_audio != null && _audio.IsPaused) ? 1f : 0f
+            intArg2 = timelineState,
+            floatArg = (_audio != null && _audio.IsPaused) ? 1f : 0f,
+            floatArg2 = timelineTime
         }, clientIp);
 
         _transport.SendToPeer(new EHubMessage
@@ -166,6 +214,16 @@ public class EHubNetworkBridge : MonoBehaviour
     private void Update()
     {
         if (_transport == null) return;
+
+        if (_transport.Role == EHubRole.Host)
+        {
+            _beaconTimer += Time.unscaledDeltaTime;
+            if (_beaconTimer >= 3f)
+            {
+                _beaconTimer = 0f;
+                _transport.SendHostBeacon();
+            }
+        }
 
         if (_transport.Role == EHubRole.Client)
         {
@@ -219,6 +277,7 @@ public class EHubNetworkBridge : MonoBehaviour
 
                 case EHubMessageTypes.StateSync:
                     _bootstrap?.ApplySwitchMode((PixelHubBootstrapper.StartMode)msg.intArg);
+                    _bootstrap?.ApplyTimelineSync(msg.intArg2, msg.floatArg2);
                     _audio?.SetPaused(msg.floatArg >= 0.5f, fromNetwork: true);
                     break;
 

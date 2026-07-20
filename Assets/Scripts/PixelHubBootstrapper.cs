@@ -122,7 +122,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : T=timeline | D=debug | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → Tests couleur : 1=1ère LED | R/G/B | 0=off (Ctrl+1..4 = lyre DMX)");
-        Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
+        Debug.Log("[PixelHubBootstrapper] → eHub : 1 HÔTE (mur LED) + clients (télécommande) — panneau bas.");
         Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
     }
 
@@ -434,6 +434,35 @@ public class PixelHubBootstrapper : MonoBehaviour
             case EHubTimelineAction.Play: PlayShow(); break;
             case EHubTimelineAction.Pause: PauseShow(); break;
             case EHubTimelineAction.Stop: StopShow(); break;
+        }
+        RefreshDisplay();
+    }
+
+    /// <summary>État timeline pour sync eHub à la connexion d'un client.</summary>
+    public void GetTimelineSyncState(out int playState, out float time)
+    {
+        playState = EHubTimelineAction.Stop;
+        time = 0f;
+        if (_showTimeline == null) return;
+
+        time = _showTimeline.CurrentTime;
+        if (_showTimeline.IsPlaying)
+            playState = EHubTimelineAction.Play;
+        else if (time > 0.01f)
+            playState = EHubTimelineAction.Pause;
+    }
+
+    /// <summary>Aligne la timeline locale sur l'hôte (connexion client).</summary>
+    public void ApplyTimelineSync(int playState, float time)
+    {
+        if (_showTimeline == null) return;
+
+        _showTimeline.Seek(time);
+        switch (playState)
+        {
+            case EHubTimelineAction.Play: _showTimeline.Play(); break;
+            case EHubTimelineAction.Pause: _showTimeline.Pause(); break;
+            default: _showTimeline.Stop(); break;
         }
         RefreshDisplay();
     }

@@ -65,7 +65,7 @@ public class EHubControlPanel : MonoBehaviour
     private int ComputePanelHeight()
     {
         if (_eHub == null || !_eHub.IsConnected)
-            return 150;
+            return string.IsNullOrEmpty(_eHub?.DiscoveredHostIp) ? 170 : 200;
 
         int h = 420;
         if (_audio != null && _audio.soundMappings.Count > 0)
@@ -99,20 +99,24 @@ public class EHubControlPanel : MonoBehaviour
         if (_eHub.Role == EHubRole.Host)
         {
             GUI.Label(new Rect(x, y, w, 18),
-                $"★ HÔTE — partagez {_eHub.LocalIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+                $"★ HÔTE — mur LED actif  {_eHub.LocalIp}:{_eHub.Port}  [{_eHub.SessionId}]");
             y += 18;
-            GUI.Label(new Rect(x, y, w, 18), $"Clients connectés ({_eHub.TotalPostes - 1}) : {_eHub.ActivePeersLabel}");
+            GUI.Label(new Rect(x, y, w, 18), $"Clients ({_eHub.TotalPostes - 1}) : {_eHub.ActivePeersLabel}");
+            y += 18;
+            GUI.Label(new Rect(x, y, w, 32),
+                "Seul ce poste envoie vers le mur LED.\nLes clients contrôlent à distance via sync.");
         }
         else
         {
             GUI.Label(new Rect(x, y, w, 18),
-                $"● CLIENT — connecté à {_eHub.HostIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+                $"● CLIENT — {_eHub.HostIp}:{_eHub.Port}  [{_eHub.SessionId}]");
             y += 18;
-            GUI.Label(new Rect(x, y, w, 36),
-                "Accès complet : mêmes touches et boutons que l'hôte.\nDéconnectez-vous pour arrêter le contrôle distant.");
+            GUI.Label(new Rect(x, y, w, 48),
+                "Télécommande : touches et boutons synchronisés avec l'hôte.\n" +
+                "Aperçu local OK — le mur LED physique est piloté par l'hôte uniquement.");
         }
 
-        y += 40;
+        y += 52;
 
         if (GUI.Button(new Rect(x, y, w, 26), "Se déconnecter"))
             _eHub.Disconnect();
@@ -137,9 +141,21 @@ public class EHubControlPanel : MonoBehaviour
             _eHub.ConnectToHost(_hostIpInput);
 
         y += 28;
-        GUI.Label(new Rect(x, y, w, 32),
-            "1) Une personne clique « Je suis l'hôte »\n2) Les autres saisissent son IP puis Connecter");
-        y += 34;
+
+        if (!string.IsNullOrEmpty(_eHub.DiscoveredHostIp))
+        {
+            GUI.Label(new Rect(x, y, w, 16), $"Hôte détecté : {_eHub.DiscoveredHostIp}");
+            y += 18;
+            if (GUI.Button(new Rect(x, y, w, 24), $"Se connecter à {_eHub.DiscoveredHostIp}"))
+                _eHub.ConnectToDiscoveredHost();
+            y += 28;
+        }
+
+        GUI.Label(new Rect(x, y, w, 48),
+            "1) UNE personne clique « Je suis l'hôte » (mur LED)\n" +
+            "2) Les autres se connectent en CLIENT (télécommande)\n" +
+            "3) À la connexion, l'état se synchronise automatiquement");
+        y += 50;
     }
 
     private void DrawModeButtons(float x, ref float y, float w)

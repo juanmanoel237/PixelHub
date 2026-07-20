@@ -61,6 +61,16 @@ namespace Laps.Core
         /// <summary>Déclenché côté client quand l'hôte répond HelloAck.</summary>
         public event Action ClientLinked;
 
+        /// <summary>Hôte découvert sur le LAN (beacon).</summary>
+        public event Action<string> HostDiscovered;
+
+        /// <summary>Autre hôte détecté alors que nous sommes déjà hôte.</summary>
+        public event Action<string> HostConflictDetected;
+
+        public string DiscoveredHostIp { get; private set; }
+        public string LastHostConflictIp { get; private set; }
+        private long _lastHostConflictLogMs;
+
         public EHubTransport(int port, string sessionId)
         {
             _port = port > 0 ? port : 9000;
@@ -89,6 +99,13 @@ namespace Laps.Core
             Debug.Log($"[eHub] Connexion à l'hôte {_hostIp}:{_port}…");
         }
 
+        /// <summary>Écoute les annonces d'hôte sur le LAN (mode solo, avant connexion).</summary>
+        public void StartDiscoveryListen()
+        {
+            if (_role != EHubRole.Solo || _running) return;
+            StartListener();
+        }
+
         private void StartListener()
         {
             if (_running) return;
@@ -97,7 +114,7 @@ namespace Laps.Core
             _listener.Client.ReceiveBufferSize = 65536;
 
             _sender = new UdpClient();
-            _sender.EnableBroadcast = false;
+            _sender.EnableBroadcast = true;
 
             _running = true;
             _thread = new Thread(ReceiveLoop)
@@ -133,6 +150,12 @@ namespace Laps.Core
                         continue;
                     }
 
+                    if (msg.type == EHubMessageTypes.HostBeacon)
+                    {
+                        HandleHostBeacon(remoteIp, msg);
+                        continue;
+                    }
+
                     if (msg.type == EHubMessageTypes.HelloAck)
                     {
                         bool wasLinked = IsClientLinked();
@@ -160,6 +183,58 @@ namespace Laps.Core
                     if (_running)
                         Debug.LogWarning($"[eHub] Erreur réception : {e.Message}");
                 }
+            }
+        }
+
+        private void HandleHostBeacon(string remoteIp, EHubMessage msg)
+        {
+            string hostIp = string.IsNullOrEmpty(msg.stringArg) ? remoteIp : msg.stringArg.Trim();
+            if (string.IsNullOrEmpty(hostIp)) return;
+
+            if (_role == EHubRole.Host)
+            {
+                if (string.Equals(hostIp, _localIp, StringComparison.OrdinalIgnoreCase)) return;
+
+                LastHostConflictIp = hostIp;
+                long now = NowMs();
+                if (now - _lastHostConflictLogMs > 5000)
+                {
+                    _lastHostConflictLogMs = now;
+                    HostConflictDetected?.Invoke(hostIp);
+                }
+                return;
+            }
+
+            if (_role == EHubRole.Solo || (_role == EHubRole.Client && !IsClientLinked()))
+            {
+                if (string.Equals(hostIp, _localIp, StringComparison.OrdinalIgnoreCase)) return;
+                DiscoveredHostIp = hostIp;
+                HostDiscovered?.Invoke(hostIp);
+            }
+        }
+
+        /// <summary>Annonce périodique de l'hôte sur le LAN (découverte automatique).</summary>
+        public void SendHostBeacon()
+        {
+            if (_role != EHubRole.Host || _sender == null) return;
+
+            var msg = new EHubMessage
+            {
+                type = EHubMessageTypes.HostBeacon,
+                sessionId = _sessionId,
+                senderId = _clientId,
+                stringArg = _localIp
+            };
+
+            byte[] data = Encoding.UTF8.GetBytes(JsonUtility.ToJson(msg));
+            try
+            {
+                _sender.Send(data, data.Length, new IPEndPoint(IPAddress.Broadcast, _port));
+                MessagesSent++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[eHub] Beacon broadcast échoué : {e.Message}");
             }
         }
 
@@ -204,6 +279,7 @@ namespace Laps.Core
         private bool IsReceiveAllowed(string remoteIp)
         {
             if (_role == EHubRole.Host) return true;
+            if (_role == EHubRole.Solo) return true;
             if (_role == EHubRole.Client)
                 return string.Equals(remoteIp, _hostIp, StringComparison.OrdinalIgnoreCase);
             return false;
