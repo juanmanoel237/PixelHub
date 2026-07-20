@@ -114,7 +114,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         UpdatePreviewProvider();
 
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
-        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : 1=1ère LED | R/G/B | 0=off | T=timeline | E=eHuB | A=audio | V=video");
+        Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : T=timeline | D=debug | E=eHuB | A=audio | V=video");
+        Debug.Log("[PixelHubBootstrapper] → En mode DEBUG uniquement : 1, R, G, B, 0");
         Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
         Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
     }
@@ -131,15 +132,15 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestSwitchMode(StartMode.Manual);
         else if (Input.GetKeyDown(KeyCode.V))
             RequestSwitchMode(StartMode.VideoCapture);
-        else if (Input.GetKeyDown(KeyCode.Alpha1))
+        else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.Alpha1))
             RequestDebugColor(EHubDebugColor.FirstLed);
-        else if (Input.GetKeyDown(KeyCode.R))
+        else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.R))
             RequestDebugColor(EHubDebugColor.Red);
-        else if (Input.GetKeyDown(KeyCode.G))
+        else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.G))
             RequestDebugColor(EHubDebugColor.Green);
-        else if (Input.GetKeyDown(KeyCode.B))
+        else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.B))
             RequestDebugColor(EHubDebugColor.Blue);
-        else if (Input.GetKeyDown(KeyCode.Alpha0))
+        else if (_currentMode == StartMode.Debug && Input.GetKeyDown(KeyCode.Alpha0))
             RequestDebugColor(EHubDebugColor.BlackOut);
         else if (Input.GetKeyDown(KeyCode.F1))
             TestMovingHead(1);
@@ -190,30 +191,31 @@ public class PixelHubBootstrapper : MonoBehaviour
     /// <summary>Appelé localement ou via eHub (autre poste).</summary>
     public void ApplyDebugColor(int colorCode)
     {
+        if (_currentMode != StartMode.Debug)
+        {
+            Debug.Log("[PixelHubBootstrapper] DebugColor ignoré (mode non-debug). Appuyez sur D pour activer les tests couleur.");
+            return;
+        }
+
         switch (colorCode)
         {
             case EHubDebugColor.Red:
-                SwitchToDebug();
                 _debugPanel?.SendTestColor(Color.red);
                 SyncPreview(_debugPanel, "Debug — Rouge");
                 break;
             case EHubDebugColor.Green:
-                SwitchToDebug();
                 _debugPanel?.SendTestColor(Color.green);
                 SyncPreview(_debugPanel, "Debug — Vert");
                 break;
             case EHubDebugColor.Blue:
-                SwitchToDebug();
                 _debugPanel?.SendTestColor(Color.blue);
                 SyncPreview(_debugPanel, "Debug — Bleu");
                 break;
             case EHubDebugColor.BlackOut:
-                SwitchToDebug();
                 _debugPanel?.SendBlackOut();
                 SyncPreview(_debugPanel, "Debug — Off");
                 break;
             case EHubDebugColor.FirstLed:
-                SwitchToDebug();
                 _debugPanel?.SendFirstLedTest(Color.red);
                 SyncPreview(_debugPanel, "Debug — 1ère LED rouge");
                 break;
