@@ -645,6 +645,8 @@ GameObject:
   - component: {fileID: 1599240897}
   - component: {fileID: 1599240896}
   - component: {fileID: 1599240898}
+  - component: {fileID: 1599240900}
+  - component: {fileID: 1599240899}
   m_Layer: 0
   m_Name: PixelHub
   m_TagString: Untagged
@@ -695,9 +697,38 @@ MonoBehaviour:
   _routingEngine: {fileID: 0}
   _showTimeline: {fileID: 0}
   _debugPanel: {fileID: 0}
+  _eHubReceiver: {fileID: 0}
   _audioReactive: {fileID: 0}
   _videoCapture: {fileID: 0}
+  _otherDevices: {fileID: 0}
   _startMode: 0
+--- !u!114 &1599240899
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1599240895}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37c7fd0868c66ed41aa7120eb86db72e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Laps.Authoring::Laps.Authoring.DanmarkKeyEffect
+--- !u!114 &1599240900
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1599240895}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52de21a22b6dd44c9cc19f810c65059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Timeline::UnityEngine.Timeline.SignalReceiver
+  m_Events:
+    m_Signals: []
+    m_Events: []
 --- !u!1001 &6829352580376196397
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -752,21 +783,172 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7136841828887026905, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
       propertyPath: m_SceneBindings.Array.size
-      value: 3
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 7136841828887026905, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
       propertyPath: m_SceneBindings.Array.data[2].key
       value: 
       objectReference: {fileID: 5204240406972227542, guid: f22fa5f2d87a7e24289970ff3a74c278, type: 2}
     - target: {fileID: 7136841828887026905, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
+      propertyPath: m_SceneBindings.Array.data[3].key
+      value: 
+      objectReference: {fileID: -1620585398691305943, guid: f22fa5f2d87a7e24289970ff3a74c278, type: 2}
+    - target: {fileID: 7136841828887026905, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
       propertyPath: m_SceneBindings.Array.data[2].value
       value: 
       objectReference: {fileID: 492549547}
+    - target: {fileID: 7136841828887026905, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
+      propertyPath: m_SceneBindings.Array.data[3].value
+      value: 
+      objectReference: {fileID: 1599240900}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2423154199404779178, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6829352580376196399}
   m_SourcePrefab: {fileID: 100100000, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
+--- !u!1 &6829352580376196398 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2423154199404779178, guid: ca3bf75e2d883f7418ce28bf5c3f7862, type: 3}
+  m_PrefabInstance: {fileID: 6829352580376196397}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6829352580376196399
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6829352580376196398}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52de21a22b6dd44c9cc19f810c65059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Timeline::UnityEngine.Timeline.SignalReceiver
+  m_Events:
+    m_Signals:
+    - {fileID: 11400000, guid: 735e2456bfacf0a46bf901ad8383184b, type: 2}
+    - {fileID: 11400000, guid: 41ddd88a05a3fc04b8d8d532275b06ee, type: 2}
+    - {fileID: 11400000, guid: f820b4afc604ecd4b98f231167dfa017, type: 2}
+    - {fileID: 11400000, guid: 2e44484676d8d30479446e06c9533f5d, type: 2}
+    - {fileID: 11400000, guid: 8b53482a0fb552644b9d24c0dbad1022, type: 2}
+    - {fileID: 11400000, guid: fe77813b208995b4e91deb985097d080, type: 2}
+    - {fileID: 11400000, guid: c966afd4470f6374e88b2b9a50b3c948, type: 2}
+    - {fileID: 11400000, guid: cd09bc929e9dc454f945e790bb3165ce, type: 2}
+    m_Events:
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: D
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: A
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: N
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: E
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: M
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: R
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: SpawnLetter
+          m_Mode: 5
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: K
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1599240899}
+          m_TargetAssemblyTypeName: Laps.Authoring.DanmarkKeyEffect, Laps.Authoring
+          m_MethodName: ShowDanmarkComplete
+          m_Mode: 1
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

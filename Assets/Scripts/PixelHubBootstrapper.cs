@@ -55,6 +55,10 @@ public class PixelHubBootstrapper : MonoBehaviour
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
 
+        // Effet DANMARK (Shift+lettres → lettres volantes sur le mur LED)
+        if (GetComponent<DanmarkKeyEffect>() == null)
+            gameObject.AddComponent<DanmarkKeyEffect>();
+
         // Vidéo overlay sur un GameObject séparé pour que GUI.depth fonctionne
         // indépendamment des autres panneaux OnGUI
         var videoOverlayGO = new GameObject("VideoOverlayRenderer");
