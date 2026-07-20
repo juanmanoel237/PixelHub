@@ -277,7 +277,16 @@ public class EHubNetworkBridge : MonoBehaviour
 
     private void Send(EHubMessage msg)
     {
-        if (!_syncEnabled || _transport == null || _applyingRemote || !_transport.IsConnected) return;
+        if (!_syncEnabled || _transport == null || _applyingRemote) return;
+
+        if (!_transport.IsConnected)
+        {
+            Debug.LogWarning(
+                $"[eHub] Message {msg?.type} non envoyé — pas connecté " +
+                $"(rôle={_transport.Role}, link={_transport.ClientLinkState}).");
+            return;
+        }
+
         _transport.Send(msg);
     }
 

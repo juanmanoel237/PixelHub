@@ -48,7 +48,9 @@ namespace Laps.Core
         private volatile bool _running;
         private readonly ConcurrentQueue<EHubMessage> _incoming = new ConcurrentQueue<EHubMessage>();
         private readonly EHubPeerTracker _peers = new EHubPeerTracker();
+        private readonly ConcurrentDictionary<string, long> _seenMsgIds = new ConcurrentDictionary<string, long>();
         private long _lastHostContactMs;
+        private long _lastSeenCleanupMs;
 
         public EHubRole Role => _role;
         public EHubClientLinkState ClientLinkState => _clientLinkState;
@@ -246,14 +248,41 @@ namespace Laps.Core
 
                     if (!SessionMatches(msg)) continue;
 
+                    // Ignore le doublon unicast+broadcast du même envoi client.
+                    if (!string.IsNullOrEmpty(msg.msgId))
+                    {
+                        long nowSeen = NowMs();
+                        if (!_seenMsgIds.TryAdd(msg.msgId, nowSeen))
+                            continue;
+                        if (nowSeen - _lastSeenCleanupMs > 5000)
+                        {
+                            _lastSeenCleanupMs = nowSeen;
+                            foreach (var kv in _seenMsgIds)
+                            {
+                                if (nowSeen - kv.Value > 8000)
+                                    _seenMsgIds.TryRemove(kv.Key, out _);
+                            }
+                        }
+                    }
+
                     _peers.Note(msg.senderId, remoteIp);
                     _lastHostContactMs = NowMs();
+
+                    // Tout message applicatif d'un client maintient sa présence (pas seulement Hello).
+                    if (_role == EHubRole.Host && !string.IsNullOrEmpty(remoteIp))
+                        _connectedClients[remoteIp] = NowMs();
 
                     if (_role == EHubRole.Host)
                         RelayToClients(msg, remoteIp);
 
                     _incoming.Enqueue(msg);
                     MessagesReceived++;
+                    if (msg.type != EHubMessageTypes.Hello &&
+                        msg.type != EHubMessageTypes.HelloAck &&
+                        msg.type != EHubMessageTypes.HostBeacon)
+                    {
+                        Debug.Log($"[eHub] RX {msg.type} de {remoteIp} (rôle={_role}, session={msg.sessionId})");
+                    }
                 }
                 catch (SocketException)
                 {
@@ -509,15 +538,27 @@ namespace Laps.Core
 
             msg.sessionId = _sessionId;
             msg.senderId = _clientId;
+            if (string.IsNullOrEmpty(msg.msgId))
+                msg.msgId = Guid.NewGuid().ToString("N").Substring(0, 10);
 
             if (_role == EHubRole.Host)
             {
+                int n = 0;
                 foreach (string ip in GetActiveClientIps())
+                {
                     SendToIp(msg, ip);
+                    n++;
+                }
+                Debug.Log($"[eHub] TX {msg.type} → {n} client(s)");
             }
             else if (_role == EHubRole.Client && !string.IsNullOrEmpty(_hostIp))
             {
+                // Unicast + broadcast : même stratégie que SendHello.
+                // Sur certains Wi‑Fi le Hello passe en broadcast mais le unicast client→hôte
+                // est filtré — sans broadcast, l'hôte ne reçoit jamais les actions clavier.
                 SendToIp(msg, _hostIp);
+                BroadcastPacket(msg);
+                Debug.Log($"[eHub] TX {msg.type} → hôte {_hostIp} (+ broadcast LAN)");
             }
         }
 
@@ -580,6 +621,8 @@ namespace Laps.Core
             _sender = null;
             _thread?.Join(300);
             _thread = null;
+            _seenMsgIds.Clear();
+            _connectedClients.Clear();
         }
     }
 }

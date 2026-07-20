@@ -12,6 +12,8 @@ namespace Laps.Core
         public string type;
         public string sessionId;
         public string senderId;
+        /// <summary>Id court pour dédupliquer unicast+broadcast du même envoi.</summary>
+        public string msgId;
         public int intArg;
         public int intArg2;
         public float floatArg;
