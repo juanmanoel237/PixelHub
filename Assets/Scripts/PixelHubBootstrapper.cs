@@ -63,9 +63,23 @@ public class PixelHubBootstrapper : MonoBehaviour
 
         // Vidéo overlay sur un GameObject séparé pour que GUI.depth fonctionne
         // indépendamment des autres panneaux OnGUI
-        var videoOverlayGO = new GameObject("VideoOverlayRenderer");
-        videoOverlayGO.transform.SetParent(transform);
-        videoOverlayGO.AddComponent<Laps.Authoring.VideoOverlayRenderer>();
+        // Ne le recrée pas s'il est déjà dans la scène (ex: pour l'Activation Track)
+        if (FindObjectOfType<Laps.Authoring.VideoOverlayRenderer>(true) == null)
+        {
+            var videoOverlayGO = new GameObject("VideoOverlayRenderer");
+            videoOverlayGO.transform.SetParent(transform);
+            videoOverlayGO.AddComponent<Laps.Authoring.VideoOverlayRenderer>();
+        }
+
+        // Second overlay : confettis
+        // Si un ConfettiOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.ConfettiOverlayRenderer>(true) == null)
+        {
+            var confettiOverlayGO = new GameObject("ConfettiOverlayRenderer");
+            confettiOverlayGO.transform.SetParent(transform);
+            confettiOverlayGO.AddComponent<Laps.Authoring.ConfettiOverlayRenderer>();
+        }
     }
 
     private void Start()

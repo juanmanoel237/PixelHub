@@ -6,46 +6,29 @@ using Laps.Core;
 namespace Laps.Authoring
 {
     /// <summary>
-    /// Gère le VideoPlayer pour la vidéo de combat overlay et expose la RenderTexture
-    /// + un Material luma-key pour que LedPreviewOverlay puisse la dessiner
-    /// dans le cadre Aperçu LEDs avec fond transparent.
-    /// Alimente VideoOverlayCompositor pour envoyer les stickmen au mur LED.
+    /// Gère le VideoPlayer pour la vidéo de confettis overlay et expose la RenderTexture.
+    /// Alimente ConfettiOverlayCompositor pour envoyer les confettis au mur LED.
     /// </summary>
-    public class VideoOverlayRenderer : MonoBehaviour
+    public class ConfettiOverlayRenderer : MonoBehaviour
     {
-        public static VideoOverlayRenderer Instance { get; private set; }
+        public static ConfettiOverlayRenderer Instance { get; private set; }
 
         private VideoPlayer _videoPlayer;
         private RenderTexture _videoRT;
-        private Material _lumaKeyMat;
         private bool _videoReady;
         private bool _paused;
         private bool _readbackPending;
         private Color32[] _pixelBuffer;
         private int _pixelWidth;
         private int _pixelHeight;
+        private int _frameCount = 0;
 
         /// <summary>La RenderTexture de la vidéo, null tant qu'elle n'est pas prête.</summary>
         public RenderTexture VideoTexture => _videoReady ? _videoRT : null;
 
-        /// <summary>Matériau luma-key pour rendre le fond noir transparent.</summary>
-        public Material LumaKeyMaterial => _lumaKeyMat;
-
         private void Awake()
         {
             Instance = this;
-
-            var shader = Shader.Find("Hidden/VideoLumaKey");
-            if (shader != null)
-            {
-                _lumaKeyMat = new Material(shader);
-                _lumaKeyMat.SetFloat("_Threshold", 0.10f);
-                _lumaKeyMat.SetFloat("_Softness", 0.08f);
-            }
-            else
-            {
-                Debug.LogWarning("[VideoOverlayRenderer] Shader 'Hidden/VideoLumaKey' non trouvé !");
-            }
         }
 
         private void Start()
@@ -63,7 +46,7 @@ namespace Laps.Authoring
         private void OnDisable()
         {
             // L'Activation Track désactive l'objet → on efface le buffer
-            VideoOverlayCompositor.ClearFrame();
+            ConfettiOverlayCompositor.ClearFrame();
             if (_videoPlayer != null && _videoPlayer.isPlaying)
                 _videoPlayer.Pause();
         }
@@ -71,9 +54,8 @@ namespace Laps.Authoring
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
-            VideoOverlayCompositor.ClearFrame();
+            ConfettiOverlayCompositor.ClearFrame();
             CleanupVideo();
-            if (_lumaKeyMat != null) Destroy(_lumaKeyMat);
         }
 
         private void Update()
@@ -92,13 +74,28 @@ namespace Laps.Authoring
             var data = request.GetData<Color32>();
             if (_pixelBuffer == null || _pixelBuffer.Length != data.Length)
             {
-                _pixelWidth = _videoRT != null ? _videoRT.width : 0;
+                _pixelWidth  = _videoRT != null ? _videoRT.width  : 0;
                 _pixelHeight = _videoRT != null ? _videoRT.height : 0;
                 _pixelBuffer = new Color32[data.Length];
             }
 
             data.CopyTo(_pixelBuffer);
-            VideoOverlayCompositor.SetFrame(_pixelBuffer, _pixelWidth, _pixelHeight);
+            
+            // Debug : vérifier s'il y a des pixels non-noirs
+            if (_frameCount % 60 == 0)
+            {
+                float maxLuma = 0f;
+                for (int i = 0; i < _pixelBuffer.Length; i += 100) // sample every 100 pixels for speed
+                {
+                    Color32 src = _pixelBuffer[i];
+                    float luma = (0.2126f * src.r + 0.7152f * src.g + 0.0722f * src.b) / 255f;
+                    if (luma > maxLuma) maxLuma = luma;
+                }
+                Debug.Log($"[ConfettiOverlayRenderer] Frame {_frameCount}, Max Luma: {maxLuma}");
+            }
+            _frameCount++;
+
+            ConfettiOverlayCompositor.SetFrame(_pixelBuffer, _pixelWidth, _pixelHeight);
         }
 
         /// <summary>Pause / reprise synchronisée avec Espace (et eHub).</summary>
@@ -123,17 +120,17 @@ namespace Laps.Authoring
             _videoPlayer = gameObject.AddComponent<VideoPlayer>();
             _videoPlayer.playOnAwake = false;
             _videoPlayer.source = VideoSource.Url;
-            _videoPlayer.url = System.IO.Path.Combine(Application.streamingAssetsPath, "combat_overlay.mov");
+            _videoPlayer.url = System.IO.Path.Combine(Application.streamingAssetsPath, "confetti_overlay.mov");
             _videoPlayer.isLooping = true;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
             _videoPlayer.skipOnDrop = true;
 
             _videoPlayer.prepareCompleted += OnPrepared;
-            _videoPlayer.errorReceived += OnError;
+            _videoPlayer.errorReceived    += OnError;
             _videoPlayer.Prepare();
 
-            Debug.Log("[VideoOverlayRenderer] Préparation de la vidéo…");
+            Debug.Log("[ConfettiOverlayRenderer] Préparation de la vidéo confetti…");
         }
 
         private void OnPrepared(VideoPlayer vp)
@@ -149,12 +146,12 @@ namespace Laps.Authoring
             if (!_paused)
                 vp.Play();
             _videoReady = true;
-            Debug.Log($"[VideoOverlayRenderer] Vidéo prête ({w}×{h}), lecture en boucle avec luma-key.");
+            Debug.Log($"[ConfettiOverlayRenderer] Vidéo confetti prête ({w}×{h}), lecture en boucle.");
         }
 
         private void OnError(VideoPlayer vp, string message)
         {
-            Debug.LogError($"[VideoOverlayRenderer] Erreur vidéo : {message}");
+            Debug.LogError($"[ConfettiOverlayRenderer] Erreur vidéo : {message}");
         }
 
         private void CleanupVideo()
@@ -162,7 +159,7 @@ namespace Laps.Authoring
             if (_videoPlayer != null)
             {
                 _videoPlayer.prepareCompleted -= OnPrepared;
-                _videoPlayer.errorReceived -= OnError;
+                _videoPlayer.errorReceived    -= OnError;
                 _videoPlayer.Stop();
                 Destroy(_videoPlayer);
             }

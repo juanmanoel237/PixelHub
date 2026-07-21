@@ -163,6 +163,7 @@ namespace Laps.Routing
                         LedFireworks.CompositeOnto(_writeBuffer, w, h);
                         LedTextOverlay.CompositeOnto(_writeBuffer, w, h);
                         VideoOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        ConfettiOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         if (map.flipY) LedBufferTransforms.FlipBufferY(_writeBuffer, w, h);
                         if (map.flipX) LedBufferTransforms.FlipBufferX(_writeBuffer, w, h);
                     }
