@@ -400,7 +400,6 @@ namespace Laps.Core
             if (_role != EHubRole.Client) return;
 
             bool wasLinked = _clientLinkState == EHubClientLinkState.Linked;
-            _hostIp = remoteIp;
             _lastHostContactMs = NowMs();
             _clientLinkState = EHubClientLinkState.Linked;
             _lastConnectionError = "";
@@ -414,7 +413,7 @@ namespace Laps.Core
 
         private void HandleHostBeacon(string remoteIp, EHubMessage msg)
         {
-            string hostIp = remoteIp;
+            string hostIp = !string.IsNullOrEmpty(msg.stringArg) ? msg.stringArg : remoteIp;
             if (string.IsNullOrEmpty(hostIp)) return;
 
             if (_role == EHubRole.Host)
@@ -436,6 +435,10 @@ namespace Laps.Core
                 if (EHubNetworkUtil.IsLoopbackOrSelf(_localIp, hostIp)) return;
                 DiscoveredHostIp = hostIp;
                 RunOnMainThread(() => HostDiscovered?.Invoke(hostIp));
+            }
+            else if (_role == EHubRole.Client)
+            {
+                _lastHostContactMs = NowMs();
             }
         }
 
@@ -542,11 +545,7 @@ namespace Laps.Core
 
             if (_role == EHubRole.Client)
             {
-                if (_clientLinkState == EHubClientLinkState.Connecting ||
-                    _clientLinkState == EHubClientLinkState.Failed)
-                    return true;
-
-                return EHubNetworkUtil.IpEquals(remoteIp, _hostIp);
+                return true;
             }
 
             return false;
