@@ -50,7 +50,19 @@ public class EHubNetworkBridge : MonoBehaviour
 
     private void Start()
     {
-        if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
+        if (!_syncEnabled)
+        {
+            Debug.LogWarning("[eHub] Bridge désactivé (_syncEnabled=false) : aucun message clavier ne sera sync.");
+            return;
+        }
+
+        if (ConfigManager.Config?.network?.eHubEnabled != true)
+        {
+            Debug.LogWarning("[eHub] Bridge inactif : config.network.eHubEnabled=false.");
+            return;
+        }
+
+        Debug.Log($"[eHub] Bridge actif (session={ConfigManager.Config.network.eHubSessionId}, port={ConfigManager.Config.network.eHubPort}).");
         EHubSyncBus.RegisterSendHandler(msg => Send(msg));
         EHubStatus.Update(true, false, EHubRole.Solo, "", 1);
         StartDiscovery();
@@ -278,6 +290,8 @@ public class EHubNetworkBridge : MonoBehaviour
     private void Send(EHubMessage msg)
     {
         if (!_syncEnabled || _transport == null || _applyingRemote) return;
+
+        Debug.Log($"[eHub] SEND request {msg?.type} (role={_transport.Role}, connected={_transport.IsConnected}, host={_transport.HostIp})");
 
         if (!_transport.IsConnected)
         {

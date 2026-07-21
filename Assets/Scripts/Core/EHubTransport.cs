@@ -51,6 +51,10 @@ namespace Laps.Core
         private readonly ConcurrentDictionary<string, long> _seenMsgIds = new ConcurrentDictionary<string, long>();
         private long _lastHostContactMs;
         private long _lastSeenCleanupMs;
+        private long _lastDropNotAllowedLogMs;
+        private long _lastDropSessionMismatchLogMs;
+        private long _lastDropInvalidMessageLogMs;
+        private long _lastDropSelfMessageLogMs;
 
         public EHubRole Role => _role;
         public EHubClientLinkState ClientLinkState => _clientLinkState;
@@ -209,30 +213,57 @@ namespace Laps.Core
                     if (data == null || data.Length == 0) continue;
 
                     string remoteIp = EHubNetworkUtil.NormalizeIp(remote.Address.ToString());
-                    if (!IsReceiveAllowed(remoteIp)) continue;
+                    if (!IsReceiveAllowed(remoteIp))
+                    {
+                        LogDropThrottled(ref _lastDropNotAllowedLogMs,
+                            $"DROP paquet depuis {remoteIp} (non autorisé pour rôle={_role}, link={_clientLinkState}, host={_hostIp})");
+                        continue;
+                    }
 
                     string json = Encoding.UTF8.GetString(data);
                     var msg = JsonUtility.FromJson<EHubMessage>(json);
-                    if (msg == null || string.IsNullOrEmpty(msg.type)) continue;
-                    if (msg.senderId == _clientId) continue;
+                    if (msg == null || string.IsNullOrEmpty(msg.type))
+                    {
+                        LogDropThrottled(ref _lastDropInvalidMessageLogMs,
+                            $"DROP paquet JSON invalide depuis {remoteIp} (taille={data.Length})");
+                        continue;
+                    }
+                    if (msg.senderId == _clientId)
+                    {
+                        LogDropThrottled(ref _lastDropSelfMessageLogMs,
+                            $"DROP écho local {msg.type} (sender={msg.senderId}, self={_clientId})");
+                        continue;
+                    }
 
                     if (msg.type == EHubMessageTypes.Hello)
                     {
-                        if (!SessionMatches(msg)) continue;
+                        if (!SessionMatches(msg))
+                        {
+                            LogDropSessionMismatch(remoteIp, msg);
+                            continue;
+                        }
                         HandleHello(remoteIp, msg);
                         continue;
                     }
 
                     if (msg.type == EHubMessageTypes.HostBeacon)
                     {
-                        if (!SessionMatches(msg)) continue;
+                        if (!SessionMatches(msg))
+                        {
+                            LogDropSessionMismatch(remoteIp, msg);
+                            continue;
+                        }
                         HandleHostBeacon(remoteIp, msg);
                         continue;
                     }
 
                     if (msg.type == EHubMessageTypes.HelloAck)
                     {
-                        if (!SessionMatches(msg)) continue;
+                        if (!SessionMatches(msg))
+                        {
+                            LogDropSessionMismatch(remoteIp, msg);
+                            continue;
+                        }
                         HandleHelloAck(remoteIp);
                         continue;
                     }
@@ -246,7 +277,11 @@ namespace Laps.Core
                         HandleHelloAck(remoteIp);
                     }
 
-                    if (!SessionMatches(msg)) continue;
+                    if (!SessionMatches(msg))
+                    {
+                        LogDropSessionMismatch(remoteIp, msg);
+                        continue;
+                    }
 
                     // Ignore le doublon unicast+broadcast du même envoi client.
                     if (!string.IsNullOrEmpty(msg.msgId))
@@ -300,6 +335,20 @@ namespace Laps.Core
         {
             if (string.IsNullOrEmpty(msg.sessionId)) return true;
             return string.Equals(msg.sessionId, _sessionId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void LogDropSessionMismatch(string remoteIp, EHubMessage msg)
+        {
+            LogDropThrottled(ref _lastDropSessionMismatchLogMs,
+                $"DROP session mismatch depuis {remoteIp} type={msg?.type} msgSession={msg?.sessionId} localSession={_sessionId}");
+        }
+
+        private static void LogDropThrottled(ref long lastLogMs, string message)
+        {
+            long now = NowMs();
+            if (now - lastLogMs < 1500) return;
+            lastLogMs = now;
+            Debug.LogWarning($"[eHub] {message}");
         }
 
         private bool IsFromTargetHost(string remoteIp)
@@ -559,6 +608,10 @@ namespace Laps.Core
                 SendToIp(msg, _hostIp);
                 BroadcastPacket(msg);
                 Debug.Log($"[eHub] TX {msg.type} → hôte {_hostIp} (+ broadcast LAN)");
+            }
+            else if (_role == EHubRole.Client)
+            {
+                Debug.LogWarning($"[eHub] TX annulé {msg.type} : hostIp vide (clientLink={_clientLinkState}).");
             }
         }
 
