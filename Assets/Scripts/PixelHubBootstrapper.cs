@@ -38,6 +38,7 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     public enum StartMode
     {
+        Lobby,        // Attente des joueurs
         Timeline,     // Authoring classique via ShowTimeline
         Debug,        // Fake state via DebugPanel (pour tester les contrôleurs)
         EHub,         // Réception eHuB UDP (P7 bonus)
@@ -90,10 +91,19 @@ public class PixelHubBootstrapper : MonoBehaviour
             return;
         }
 
+        if (ConfigManager.Config?.network?.eHubEnabled == true && _startMode == StartMode.Timeline)
+        {
+            _startMode = StartMode.Lobby; // Force Lobby at startup so scene doesn't play immediately
+        }
+
         _debugPanel?.SetRoutingEngine(_routingEngine);
 
         switch (_startMode)
         {
+            case StartMode.Lobby:
+                SwitchToLobby();
+                break;
+
             case StartMode.Timeline:
                 _showTimeline.LoadShow();
                 _showTimeline.Play();
@@ -136,7 +146,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] PixelHub démarré avec succès !");
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : T=timeline | D=debug | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → Tests couleur : 1=1ère LED | R/G/B | 0=off (Ctrl+1..4 = lyre DMX)");
-        Debug.Log("[PixelHubBootstrapper] → eHub : panneau bas — « Je suis l'hôte » ou saisir IP + Connecter.");
+        Debug.Log("[PixelHubBootstrapper] → eHub : 1 HÔTE (mur LED) + clients (télécommande) — panneau bas.");
         Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
     }
 
@@ -240,6 +250,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         switch (mode)
         {
+            case StartMode.Lobby:         SwitchToLobby(); break;
             case StartMode.Timeline:      SwitchToTimeline(); break;
             case StartMode.Debug:         SwitchToDebug(); break;
             case StartMode.Manual:        SwitchToAudioReactive(); break;
@@ -321,11 +332,52 @@ public class PixelHubBootstrapper : MonoBehaviour
             _otherDevices = GetComponent<OtherDevicesPanel>() ?? gameObject.AddComponent<OtherDevicesPanel>();
     }
 
+    public void SwitchToLobby()
+    {
+        _routingEngine.StopRoutingThread();
+        if (_showTimeline != null) _showTimeline.Stop();
+        
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            director.time = 0;
+            director.Evaluate();
+            director.Pause();
+        }
+
+        var video = FindObjectOfType<Laps.Authoring.VideoOverlayRenderer>();
+        video?.SetPaused(true);
+        
+        if (_debugPanel != null)
+        {
+            _debugPanel.SetFakeStateActive(true);
+            _debugPanel.SendBlackOut();
+            SetProviderWithDevices(_debugPanel);
+        }
+        
+        Laps.Core.VideoOverlayCompositor.ClearFrame();
+        Laps.Core.LedFireworks.ClearAll();
+        Laps.Core.LedTextOverlay.ClearAll();
+        
+        _routingEngine.StartRouting();
+        _currentMode = StartMode.Lobby;
+        SyncPreview(_debugPanel, "Lobby — En attente");
+        Debug.Log("[PixelHubBootstrapper] Mode Lobby actif (Mur LED éteint).");
+    }
+
     public void SwitchToTimeline()
     {
         _routingEngine.StopRoutingThread();
         _showTimeline.LoadShow();
         _showTimeline.Play();
+        
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null && director.state != PlayState.Playing)
+            director.Play();
+
+        var video = FindObjectOfType<Laps.Authoring.VideoOverlayRenderer>();
+        video?.SetPaused(false);
+        
         SetProviderWithDevices(_showTimeline);
         _routingEngine.StartRouting();
         _currentMode = StartMode.Timeline;
@@ -386,7 +438,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         _routingEngine.StopRoutingThread();
         SetProviderWithDevices(_videoCapture);
         _routingEngine.StartRouting();
-        _currentMode = StartMode.Manual;
+        _currentMode = StartMode.VideoCapture;
         SyncPreview(_videoCapture, "Video Capture (Feux d'artifice)");
         Debug.Log("[PixelHubBootstrapper] Mode Video Capture actif (Caméra -> LEDs).");
     }
@@ -399,7 +451,9 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     private void UpdatePreviewProvider()
     {
-        if (_currentMode == StartMode.Timeline)
+        if (_currentMode == StartMode.Lobby)
+            SyncPreview(_debugPanel, "Lobby — En attente");
+        else if (_currentMode == StartMode.Timeline)
             SyncPreview(_showTimeline, "Timeline");
         else if (_currentMode == StartMode.Debug)
             SyncPreview(_debugPanel, "Debug");
@@ -448,6 +502,100 @@ public class PixelHubBootstrapper : MonoBehaviour
             case EHubTimelineAction.Play: PlayShow(); break;
             case EHubTimelineAction.Pause: PauseShow(); break;
             case EHubTimelineAction.Stop: StopShow(); break;
+        }
+        RefreshDisplay();
+    }
+
+    /// <summary>État complet pour sync eHub à la connexion d'un client.</summary>
+    public void GetFullSyncState(
+        out int mode,
+        out int timelineState,
+        out float timelineTime,
+        out float directorTime,
+        out int directorState)
+    {
+        mode = (int)_currentMode;
+        directorTime = -1f;
+        directorState = 0;
+        GetTimelineSyncState(out timelineState, out timelineTime);
+
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            directorTime = (float)director.time;
+            directorState = (int)director.state;
+        }
+    }
+
+    /// <summary>Aligne l'écran local sur l'hôte (connexion client ou resync).</summary>
+    public void ApplyFullStateSync(
+        int mode,
+        int timelineState,
+        float timelineTime,
+        float directorTime,
+        int directorState,
+        bool paused)
+    {
+        var targetMode = (StartMode)mode;
+        ApplySwitchMode(targetMode);
+
+        if (targetMode == StartMode.Timeline)
+            ApplyTimelineSync(timelineState, timelineTime);
+        else if (targetMode == StartMode.Manual)
+            ApplyDirectorSync(directorTime, directorState);
+
+        var audio = FindObjectOfType<AudioInteractiveManager>();
+        audio?.SetPaused(paused, fromNetwork: true);
+        RefreshDisplay();
+    }
+
+    public void ApplyDirectorSync(float time, int state)
+    {
+        if (time < 0f) return;
+
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director == null) return;
+
+        director.time = time;
+        switch ((PlayState)state)
+        {
+            case PlayState.Playing:
+                director.Play();
+                break;
+            case PlayState.Paused:
+                director.Pause();
+                break;
+            default:
+                director.Stop();
+                break;
+        }
+    }
+
+    /// <summary>État timeline pour sync eHub à la connexion d'un client.</summary>
+    public void GetTimelineSyncState(out int playState, out float time)
+    {
+        playState = EHubTimelineAction.Stop;
+        time = 0f;
+        if (_showTimeline == null) return;
+
+        time = _showTimeline.CurrentTime;
+        if (_showTimeline.IsPlaying)
+            playState = EHubTimelineAction.Play;
+        else if (time > 0.01f)
+            playState = EHubTimelineAction.Pause;
+    }
+
+    /// <summary>Aligne la timeline locale sur l'hôte (connexion client).</summary>
+    public void ApplyTimelineSync(int playState, float time)
+    {
+        if (_showTimeline == null) return;
+
+        _showTimeline.Seek(time);
+        switch (playState)
+        {
+            case EHubTimelineAction.Play: _showTimeline.Play(); break;
+            case EHubTimelineAction.Pause: _showTimeline.Pause(); break;
+            default: _showTimeline.Stop(); break;
         }
         RefreshDisplay();
     }

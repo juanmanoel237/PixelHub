@@ -12,6 +12,8 @@ namespace Laps.Core
         public string type;
         public string sessionId;
         public string senderId;
+        /// <summary>Id court pour dédupliquer unicast+broadcast du même envoi.</summary>
+        public string msgId;
         public int intArg;
         public int intArg2;
         public float floatArg;
@@ -33,6 +35,7 @@ namespace Laps.Core
         public const string VolumeSet = "VolumeSet";
         public const string TimelineControl = "TimelineControl";
         public const string DanmarkLetter = "DanmarkLetter";
+        public const string HostBeacon = "HostBeacon";
     }
 
     /// <summary>Sous-actions LyreControl (intArg).</summary>

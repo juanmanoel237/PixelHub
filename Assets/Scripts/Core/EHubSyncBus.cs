@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace Laps.Core
 {
@@ -12,6 +13,14 @@ namespace Laps.Core
 
         public static void RegisterSendHandler(Action<EHubMessage> handler) => _sendHandler = handler;
 
-        public static void PublishLocal(EHubMessage msg) => _sendHandler?.Invoke(msg);
+        public static void PublishLocal(EHubMessage msg)
+        {
+            if (_sendHandler == null)
+            {
+                Debug.LogWarning($"[eHub] PublishLocal({msg?.type}) ignoré — bridge eHub pas initialisé.");
+                return;
+            }
+            _sendHandler.Invoke(msg);
+        }
     }
 }

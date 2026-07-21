@@ -36,6 +36,12 @@ namespace Laps.Core
 
         private static readonly List<FlyingLetter> _letters = new List<FlyingLetter>();
 
+        public static void ClearAll()
+        {
+            _letters.Clear();
+            _danmarkComplete = false;
+        }
+
         // État "DANMARK complet" — le mot reste affiché en bas
         private static bool _danmarkComplete;
         private static float _danmarkCompleteTime;

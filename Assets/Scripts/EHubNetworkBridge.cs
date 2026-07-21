@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using UnityEngine;
 using Laps.Core;
@@ -5,8 +6,8 @@ using Laps.Authoring;
 
 /// <summary>
 /// Relie le transport eHub UDP aux actions du show.
-/// Mode Hôte : les autres saisissent votre IP.
-/// Mode Client : saisir l'IP de l'hôte puis « Connecter ».
+/// Mode Hôte : seul poste qui envoie Art-Net vers le mur LED.
+/// Mode Client : télécommande — commandes sync vers l'hôte, aperçu local uniquement.
 /// </summary>
 public class EHubNetworkBridge : MonoBehaviour
 {
@@ -19,6 +20,7 @@ public class EHubNetworkBridge : MonoBehaviour
     private DanmarkKeyEffect _danmark;
     private bool _applyingRemote;
     private float _helloTimer;
+    private float _beaconTimer;
 
     public bool IsEnabled => _syncEnabled;
     public bool IsConnected => _transport != null && _transport.IsConnected;
@@ -28,24 +30,48 @@ public class EHubNetworkBridge : MonoBehaviour
     public string SessionId => ConfigManager.Config?.network?.eHubSessionId ?? "—";
     public string LocalIp => _transport?.LocalIp ?? ResolveLocalIpFallback();
     public string HostIp => _transport?.HostIp ?? "";
+    public string DiscoveredHostIp => _transport?.DiscoveredHostIp ?? "";
+    public string LastConnectionError => _transport?.LastConnectionError ?? "";
+    public bool IsClientConnecting => _transport != null && _transport.IsClientConnecting;
+    public IReadOnlyList<string> LocalIpCandidates => EHubNetworkUtil.CollectLanCandidates();
     public int Port => ConfigManager.Config?.network?.eHubPort ?? 9000;
     public string PeersConfigLabel => _transport?.PeersConfigLabel ?? "—";
     public string ActivePeersLabel => _transport?.ActivePeersLabel ?? "—";
     public int TotalPostes => _transport?.TotalPostes ?? 1;
+    public bool IsHardwareOutputEnabled => EHubStatus.ShouldOutputToHardware;
 
     private void Awake()
     {
         _bootstrap = GetComponent<PixelHubBootstrapper>();
+        if (_bootstrap == null) _bootstrap = FindObjectOfType<PixelHubBootstrapper>();
+        
         _audio = FindObjectOfType<AudioInteractiveManager>();
+        
         _otherDevices = GetComponent<OtherDevicesPanel>();
+        if (_otherDevices == null) _otherDevices = FindObjectOfType<OtherDevicesPanel>();
+        
         _danmark = GetComponent<DanmarkKeyEffect>();
+        if (_danmark == null) _danmark = FindObjectOfType<DanmarkKeyEffect>();
     }
 
     private void Start()
     {
-        if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
+        if (!_syncEnabled)
+        {
+            Debug.LogWarning("[eHub] Bridge désactivé (_syncEnabled=false) : aucun message clavier ne sera sync.");
+            return;
+        }
+
+        if (ConfigManager.Config?.network?.eHubEnabled != true)
+        {
+            Debug.LogWarning("[eHub] Bridge inactif : config.network.eHubEnabled=false.");
+            return;
+        }
+
+        Debug.Log($"[eHub] Bridge actif (session={ConfigManager.Config.network.eHubSessionId}, port={ConfigManager.Config.network.eHubPort}).");
         EHubSyncBus.RegisterSendHandler(msg => Send(msg));
         EHubStatus.Update(true, false, EHubRole.Solo, "", 1);
+        StartDiscovery();
     }
 
     private void OnDestroy()
@@ -54,7 +80,6 @@ public class EHubNetworkBridge : MonoBehaviour
         _transport?.Dispose();
     }
 
-    /// <summary>Une personne de l'équipe clique « Je suis l'hôte ».</summary>
     public void StartAsHost()
     {
         if (!_syncEnabled) return;
@@ -62,11 +87,26 @@ public class EHubNetworkBridge : MonoBehaviour
         var net = ConfigManager.Config?.network;
         if (net == null) return;
 
-        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        if (_transport == null || !_transport.IsListening)
+            ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
         _transport.StartAsHost();
+        EHubStatus.HostDetectedOnLan = false;
+        _transport.SendHostBeacon();
+        Debug.Log("[eHub] Vous pilotez le mur LED — les clients envoient des commandes uniquement.");
+        _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.Lobby);
     }
 
-    /// <summary>Les autres membres saisissent l'IP de l'hôte et cliquent « Connecter ».</summary>
+    public void StartSessionFromLobby()
+    {
+        if (Role != EHubRole.Host) return;
+        if (TotalPostes <= 1)
+        {
+            Debug.LogWarning("[eHub] Impossible de démarrer la session : aucun joueur n'a rejoint le salon.");
+            return;
+        }
+        _bootstrap?.RequestSwitchMode(PixelHubBootstrapper.StartMode.Timeline);
+    }
+
     public void ConnectToHost(string hostIp)
     {
         if (!_syncEnabled || string.IsNullOrWhiteSpace(hostIp)) return;
@@ -75,6 +115,12 @@ public class EHubNetworkBridge : MonoBehaviour
         if (net == null) return;
 
         hostIp = hostIp.Trim();
+        if (EHubNetworkUtil.IsLoopbackOrSelf(LocalIp, hostIp))
+        {
+            Debug.LogWarning("[eHub] Vous ne pouvez pas vous connecter à votre propre IP. Demandez l'IP de l'hôte à un coéquipier.");
+            return;
+        }
+
         if (!IPAddress.TryParse(hostIp, out _))
         {
             Debug.LogWarning($"[eHub] Adresse IP invalide : « {hostIp} »");
@@ -84,22 +130,41 @@ public class EHubNetworkBridge : MonoBehaviour
         PlayerPrefs.SetString("eHub.lastHostIp", hostIp);
         PlayerPrefs.Save();
 
-        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        if (_transport == null || !_transport.IsListening)
+            ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
         _transport.ConnectToHost(hostIp);
     }
 
-    /// <summary>Quitte la session hôte/client et repasse en mode solo.</summary>
+    public void ConnectToDiscoveredHost()
+    {
+        if (string.IsNullOrEmpty(DiscoveredHostIp)) return;
+        ConnectToHost(DiscoveredHostIp);
+    }
+
     public void Disconnect()
     {
         UnsubscribeTransportEvents();
         _transport?.Dispose();
         _transport = null;
         _helloTimer = 0f;
+        _beaconTimer = 0f;
         EHubStatus.Update(_syncEnabled, false, EHubRole.Solo, "", 1);
+        EHubStatus.HostDetectedOnLan = false;
         Debug.Log("[eHub] Déconnecté — contrôle distant désactivé.");
+        StartDiscovery();
     }
 
     public static string GetSavedHostIp() => PlayerPrefs.GetString("eHub.lastHostIp", "");
+
+    private void StartDiscovery()
+    {
+        if (!_syncEnabled || ConfigManager.Config?.network?.eHubEnabled != true) return;
+        if (_transport != null && _transport.IsConnected) return;
+
+        var net = ConfigManager.Config.network;
+        ReplaceTransport(new EHubTransport(net.eHubPort, net.eHubSessionId));
+        _transport.StartDiscoveryListen();
+    }
 
     private void ReplaceTransport(EHubTransport transport)
     {
@@ -114,6 +179,9 @@ public class EHubNetworkBridge : MonoBehaviour
         if (_transport == null) return;
         _transport.ClientJoined += OnClientJoined;
         _transport.ClientLinked += OnClientLinked;
+        _transport.HostDiscovered += OnHostDiscovered;
+        _transport.HostConflictDetected += OnHostConflictDetected;
+        _transport.ClientLinkFailed += OnClientLinkFailed;
     }
 
     private void UnsubscribeTransportEvents()
@@ -121,29 +189,66 @@ public class EHubNetworkBridge : MonoBehaviour
         if (_transport == null) return;
         _transport.ClientJoined -= OnClientJoined;
         _transport.ClientLinked -= OnClientLinked;
+        _transport.HostDiscovered -= OnHostDiscovered;
+        _transport.HostConflictDetected -= OnHostConflictDetected;
+        _transport.ClientLinkFailed -= OnClientLinkFailed;
     }
 
     private void OnClientJoined(string clientIp)
     {
         if (_transport == null || _transport.Role != EHubRole.Host) return;
         PushFullStateTo(clientIp);
-        Debug.Log($"[eHub] Client connecté ({clientIp}) — état du show envoyé.");
     }
 
     private void OnClientLinked()
     {
-        Debug.Log("[eHub] Connecté à l'hôte — vous voyez le même état et pouvez contrôler le show.");
+        _helloTimer = 0f;
+        _transport?.RequestStateSyncOnNextHello();
+        _transport?.SendHello();
+        Debug.Log("[eHub] Connecté à l'hôte — télécommande active. État synchronisé depuis l'hôte.");
+    }
+
+    private void OnHostDiscovered(string hostIp)
+    {
+        EHubStatus.HostDetectedOnLan = true;
+        Debug.Log($"[eHub] Hôte détecté sur le réseau : {hostIp} — connectez-vous en CLIENT.");
+    }
+
+    private void OnClientLinkFailed(string error)
+    {
+        Debug.LogWarning($"[eHub] Échec connexion : {error}");
+    }
+
+    private void OnHostConflictDetected(string otherHostIp)
+    {
+        Debug.LogWarning(
+            $"[eHub] CONFLIT — un autre hôte ({otherHostIp}) est actif sur le même réseau. " +
+            "Un seul poste doit être hôte pour éviter les artefacts sur le mur LED.");
     }
 
     private void PushFullStateTo(string clientIp)
     {
         if (_transport == null || _bootstrap == null) return;
 
+        _bootstrap.GetFullSyncState(
+            out int mode,
+            out int timelineState,
+            out float timelineTime,
+            out float directorTime,
+            out int directorState);
+
+        string directorPayload = directorTime >= 0f
+            ? $"dt:{directorTime:F3}|ds:{directorState}"
+            : "";
+
         _transport.SendToPeer(new EHubMessage
         {
             type = EHubMessageTypes.StateSync,
-            intArg = (int)_bootstrap.CurrentMode,
-            floatArg = (_audio != null && _audio.IsPaused) ? 1f : 0f
+            intArg = mode,
+            intArg2 = timelineState,
+            floatArg = (_audio != null && _audio.IsPaused) ? 1f : 0f,
+            floatArg2 = timelineTime,
+            stringArg = directorPayload
         }, clientIp);
 
         _transport.SendToPeer(new EHubMessage
@@ -167,10 +272,22 @@ public class EHubNetworkBridge : MonoBehaviour
     {
         if (_transport == null) return;
 
+        _transport.Tick();
+
+        if (_transport.Role == EHubRole.Host)
+        {
+            _beaconTimer += Time.unscaledDeltaTime;
+            if (_beaconTimer >= 3f)
+            {
+                _beaconTimer = 0f;
+                _transport.SendHostBeacon();
+            }
+        }
+
         if (_transport.Role == EHubRole.Client)
         {
             _helloTimer += Time.unscaledDeltaTime;
-            if (_helloTimer >= 2f)
+            if (_helloTimer >= 1f)
             {
                 _helloTimer = 0f;
                 _transport.SendHello();
@@ -190,7 +307,18 @@ public class EHubNetworkBridge : MonoBehaviour
 
     private void Send(EHubMessage msg)
     {
-        if (!_syncEnabled || _transport == null || _applyingRemote || !_transport.IsConnected) return;
+        if (!_syncEnabled || _transport == null || _applyingRemote) return;
+
+        Debug.Log($"[eHub] SEND request {msg?.type} (role={_transport.Role}, connected={_transport.IsConnected}, host={_transport.HostIp})");
+
+        if (!_transport.IsConnected)
+        {
+            Debug.LogWarning(
+                $"[eHub] Message {msg?.type} non envoyé — pas connecté " +
+                $"(rôle={_transport.Role}, link={_transport.ClientLinkState}).");
+            return;
+        }
+
         _transport.Send(msg);
     }
 
@@ -210,7 +338,16 @@ public class EHubNetworkBridge : MonoBehaviour
                     break;
 
                 case EHubMessageTypes.SfxTrigger:
-                    _audio?.TriggerEffect(msg.intArg, fromNetwork: true);
+                    if (_audio == null) _audio = FindObjectOfType<AudioInteractiveManager>();
+                    if (_audio != null)
+                        _audio.TriggerEffect(msg.intArg, fromNetwork: true);
+                    else if (msg.intArg <= -96 && msg.intArg >= -99)
+                    {
+                        if (msg.intArg == -99) LedFireworks.Trigger(FireworkStyle.FlameThrowerLeft);
+                        else if (msg.intArg == -98) LedFireworks.Trigger(FireworkStyle.FlameThrowerRight);
+                        else if (msg.intArg == -97) LedFireworks.Trigger(FireworkStyle.LaserSweep);
+                        else if (msg.intArg == -96) LedFireworks.Trigger(FireworkStyle.Shockwave);
+                    }
                     break;
 
                 case EHubMessageTypes.PauseState:
@@ -218,8 +355,14 @@ public class EHubNetworkBridge : MonoBehaviour
                     break;
 
                 case EHubMessageTypes.StateSync:
-                    _bootstrap?.ApplySwitchMode((PixelHubBootstrapper.StartMode)msg.intArg);
-                    _audio?.SetPaused(msg.floatArg >= 0.5f, fromNetwork: true);
+                    ParseDirectorPayload(msg.stringArg, out float directorTime, out int directorState);
+                    _bootstrap?.ApplyFullStateSync(
+                        msg.intArg,
+                        msg.intArg2,
+                        msg.floatArg2,
+                        directorTime,
+                        directorState,
+                        msg.floatArg >= 0.5f);
                     break;
 
                 case EHubMessageTypes.DeviceAction:
@@ -253,17 +396,25 @@ public class EHubNetworkBridge : MonoBehaviour
         }
     }
 
-    private static string ResolveLocalIpFallback()
+    private static void ParseDirectorPayload(string payload, out float directorTime, out int directorState)
     {
-        try
+        directorTime = -1f;
+        directorState = 0;
+        if (string.IsNullOrEmpty(payload)) return;
+
+        foreach (string part in payload.Split('|'))
         {
-            foreach (var ip in System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName()).AddressList)
+            if (part.StartsWith("dt:", System.StringComparison.Ordinal))
             {
-                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    return ip.ToString();
+                float.TryParse(part.Substring(3), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out directorTime);
+            }
+            else if (part.StartsWith("ds:", System.StringComparison.Ordinal))
+            {
+                int.TryParse(part.Substring(3), out directorState);
             }
         }
-        catch { /* ignore */ }
-        return "?.?.?.?";
     }
+
+    private static string ResolveLocalIpFallback() => EHubNetworkUtil.ResolveBestLocalIpv4();
 }

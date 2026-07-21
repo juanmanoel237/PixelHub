@@ -173,34 +173,20 @@ namespace Laps.Authoring
 
         private void HandleSoundEffects()
         {
-            // Déclenchement normal via mapping Inspector
             for (int i = 0; i < soundMappings.Count; i++)
             {
                 if (Input.GetKeyDown(soundMappings[i].key))
-                    TriggerEffect(i, fromNetwork: false);
+                    RequestTriggerEffect(i);
             }
 
-            // Raccourcis clavier directs pour tester les lance-flammes (gauche/droite)
             if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.F))
-            {
-                TriggerEffect(-99, fromNetwork: false);
-            }
+                RequestTriggerEffect(-99);
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.H))
-            {
-                TriggerEffect(-98, fromNetwork: false);
-            }
-
-            // Raccourcis clavier directs pour tester le balayage laser (L)
+                RequestTriggerEffect(-98);
             if (Input.GetKeyDown(KeyCode.L))
-            {
-                TriggerEffect(-97, fromNetwork: false);
-            }
-
-            // Raccourcis clavier directs pour tester l'onde de choc (S)
+                RequestTriggerEffect(-97);
             if (Input.GetKeyDown(KeyCode.S))
-            {
-                TriggerEffect(-96, fromNetwork: false);
-            }
+                RequestTriggerEffect(-96);
         }
 
         private void HandleVolumeControl()

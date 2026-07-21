@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Laps.Core;
 using Laps.Authoring;
@@ -44,6 +45,13 @@ public class EHubControlPanel : MonoBehaviour
         if (_eHub == null || !_eHub.IsConnected)
             return;
 
+        if (_bootstrap != null && _bootstrap.CurrentMode == PixelHubBootstrapper.StartMode.Lobby)
+        {
+            lineY += 6;
+            DrawLobbyPanel(innerX, ref lineY, innerW);
+            return;
+        }
+
         lineY += 6;
         DrawModeButtons(innerX, ref lineY, innerW);
         lineY += 4;
@@ -65,7 +73,19 @@ public class EHubControlPanel : MonoBehaviour
     private int ComputePanelHeight()
     {
         if (_eHub == null || !_eHub.IsConnected)
-            return 150;
+        {
+            int disconnectedH = 210;
+            if (!string.IsNullOrEmpty(_eHub?.DiscoveredHostIp)) disconnectedH += 46;
+            if (_eHub != null && _eHub.IsClientConnecting) disconnectedH += 24;
+            if (!string.IsNullOrEmpty(_eHub?.LastConnectionError)) disconnectedH += 36;
+            if (_eHub?.LocalIpCandidates != null && _eHub.LocalIpCandidates.Count > 1) disconnectedH += 18;
+            return disconnectedH;
+        }
+
+        if (_bootstrap != null && _bootstrap.CurrentMode == PixelHubBootstrapper.StartMode.Lobby)
+        {
+            return 280;
+        }
 
         int h = 420;
         if (_audio != null && _audio.soundMappings.Count > 0)
@@ -83,7 +103,33 @@ public class EHubControlPanel : MonoBehaviour
         }
 
         GUI.Label(new Rect(x, y, w, 18), $"Votre IP : {_eHub.LocalIp}  (port {_eHub.Port})");
-        y += 20;
+        y += 18;
+
+        IReadOnlyList<string> ips = _eHub.LocalIpCandidates;
+        if (ips != null && ips.Count > 1)
+        {
+            GUI.Label(new Rect(x, y, w, 16), $"Autres IP locales : {string.Join(", ", ips)}");
+            y += 18;
+        }
+        else
+        {
+            y += 2;
+        }
+
+        if (_eHub.IsClientConnecting)
+        {
+            GUI.color = new Color(0.7f, 0.9f, 1f);
+            GUI.Label(new Rect(x, y, w, 18), $"Connexion à {_hostIpInput}…");
+            GUI.color = Color.white;
+            y += 22;
+        }
+        else if (!_eHub.IsConnected && !string.IsNullOrEmpty(_eHub.LastConnectionError))
+        {
+            GUI.color = new Color(1f, 0.75f, 0.55f);
+            GUI.Label(new Rect(x, y, w, 32), _eHub.LastConnectionError);
+            GUI.color = Color.white;
+            y += 34;
+        }
 
         if (_eHub.IsConnected)
         {
@@ -99,20 +145,27 @@ public class EHubControlPanel : MonoBehaviour
         if (_eHub.Role == EHubRole.Host)
         {
             GUI.Label(new Rect(x, y, w, 18),
-                $"★ HÔTE — partagez {_eHub.LocalIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+                $"★ HÔTE — mur LED actif  [{_eHub.SessionId}]");
             y += 18;
-            GUI.Label(new Rect(x, y, w, 18), $"Clients connectés ({_eHub.TotalPostes - 1}) : {_eHub.ActivePeersLabel}");
+            GUI.Label(new Rect(x, y, w, 18),
+                $"Partagez cette IP aux clients : {_eHub.LocalIp}:{_eHub.Port}");
+            y += 18;
+            GUI.Label(new Rect(x, y, w, 18), $"Clients ({_eHub.TotalPostes - 1}) : {_eHub.ActivePeersLabel}");
+            y += 18;
+            GUI.Label(new Rect(x, y, w, 32),
+                "Seul ce poste envoie vers le mur LED.\nLes clients contrôlent à distance via sync.");
         }
         else
         {
             GUI.Label(new Rect(x, y, w, 18),
-                $"● CLIENT — connecté à {_eHub.HostIp}:{_eHub.Port}  [{_eHub.SessionId}]");
+                $"● CLIENT — {_eHub.HostIp}:{_eHub.Port}  [{_eHub.SessionId}]");
             y += 18;
-            GUI.Label(new Rect(x, y, w, 36),
-                "Accès complet : mêmes touches et boutons que l'hôte.\nDéconnectez-vous pour arrêter le contrôle distant.");
+            GUI.Label(new Rect(x, y, w, 48),
+                "Télécommande : touches et boutons synchronisés avec l'hôte.\n" +
+                "Aperçu local OK — le mur LED physique est piloté par l'hôte uniquement.");
         }
 
-        y += 40;
+        y += 52;
 
         if (GUI.Button(new Rect(x, y, w, 26), "Se déconnecter"))
             _eHub.Disconnect();
@@ -129,17 +182,78 @@ public class EHubControlPanel : MonoBehaviour
         GUI.Label(new Rect(x + halfW + 4, y + 6, halfW, 18), "ou client :");
         y += 32;
 
-        GUI.Label(new Rect(x, y, w, 16), "IP de l'hôte :");
+        GUI.Label(new Rect(x, y, w, 16), "IP de l'hôte (Wi-Fi du hôte) :");
         y += 18;
 
         _hostIpInput = GUI.TextField(new Rect(x, y, w - 84, 24), _hostIpInput);
         if (GUI.Button(new Rect(x + w - 78, y, 78, 24), "Connecter"))
-            _eHub.ConnectToHost(_hostIpInput);
+        {
+            if (!string.IsNullOrWhiteSpace(_hostIpInput))
+                _eHub.ConnectToHost(_hostIpInput);
+        }
 
         y += 28;
-        GUI.Label(new Rect(x, y, w, 32),
-            "1) Une personne clique « Je suis l'hôte »\n2) Les autres saisissent son IP puis Connecter");
-        y += 34;
+
+        if (!string.IsNullOrEmpty(_eHub.DiscoveredHostIp) &&
+            !EHubNetworkUtil.IpEquals(_eHub.DiscoveredHostIp, _eHub.LocalIp))
+        {
+            GUI.Label(new Rect(x, y, w, 16), $"Hôte détecté sur le Wi-Fi : {_eHub.DiscoveredHostIp}");
+            y += 18;
+            if (GUI.Button(new Rect(x, y, w, 24), $"Se connecter à {_eHub.DiscoveredHostIp}"))
+                _eHub.ConnectToDiscoveredHost();
+            y += 28;
+        }
+
+        GUI.Label(new Rect(x, y, w, 64),
+            "N'importe qui peut être HÔTE ou CLIENT.\n" +
+            "1) L'hôte clique « Je suis l'hôte » et lit son IP\n" +
+            "2) Les autres entrent cette IP (ou bouton auto)\n" +
+            "3) L'hôte ET le client autorisent Unity (pare-feu privé)");
+        y += 66;
+    }
+
+    private void DrawLobbyPanel(float x, ref float y, float w)
+    {
+        GUI.color = new Color(0.9f, 0.9f, 0.3f);
+        GUI.Label(new Rect(x, y, w, 24), "=== SALON D'ATTENTE ===");
+        GUI.color = Color.white;
+        y += 28;
+
+        GUI.Label(new Rect(x, y, w, 18), $"Utilisateurs connectés : {_eHub.TotalPostes}");
+        y += 18;
+        GUI.Label(new Rect(x, y, w, 18), $"Joueurs : {_eHub.ActivePeersLabel}");
+        y += 24;
+
+        if (_eHub.Role == EHubRole.Host)
+        {
+            bool canStart = _eHub.TotalPostes > 1;
+            GUI.color = canStart ? new Color(0.4f, 1f, 0.4f) : new Color(0.5f, 0.5f, 0.5f);
+            GUI.enabled = canStart;
+
+            if (GUI.Button(new Rect(x, y, w, 40), "▶ DÉMARRER LA SESSION"))
+            {
+                _eHub.StartSessionFromLobby();
+            }
+            
+            GUI.enabled = true;
+            GUI.color = Color.white;
+            y += 46;
+
+            if (!canStart)
+            {
+                GUI.color = new Color(1f, 0.7f, 0.3f);
+                GUI.Label(new Rect(x, y, w, 40), "Attendez qu'au moins 1 joueur rejoigne\nle salon pour pouvoir démarrer.");
+                GUI.color = Color.white;
+                y += 46;
+            }
+        }
+        else
+        {
+            GUI.color = new Color(0.7f, 0.7f, 0.7f);
+            GUI.Label(new Rect(x, y, w, 40), "En attente du lancement par l'hôte...");
+            GUI.color = Color.white;
+            y += 46;
+        }
     }
 
     private void DrawModeButtons(float x, ref float y, float w)
