@@ -47,6 +47,8 @@ namespace Laps.Core
         private Thread _thread;
         private volatile bool _running;
         private readonly ConcurrentQueue<EHubMessage> _incoming = new ConcurrentQueue<EHubMessage>();
+        private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
+        private readonly ConcurrentQueue<(bool warning, string message)> _pendingLogs = new ConcurrentQueue<(bool, string)>();
         private readonly EHubPeerTracker _peers = new EHubPeerTracker();
         private readonly ConcurrentDictionary<string, long> _seenMsgIds = new ConcurrentDictionary<string, long>();
         private long _lastHostContactMs;
@@ -54,7 +56,6 @@ namespace Laps.Core
         private long _lastDropNotAllowedLogMs;
         private long _lastDropSessionMismatchLogMs;
         private long _lastDropInvalidMessageLogMs;
-        private long _lastDropSelfMessageLogMs;
 
         public EHubRole Role => _role;
         public EHubClientLinkState ClientLinkState => _clientLinkState;
@@ -150,6 +151,9 @@ namespace Laps.Core
 
         public void Tick()
         {
+            FlushPendingLogs();
+            FlushMainThreadActions();
+
             if (_role != EHubRole.Client) return;
             if (_clientLinkState == EHubClientLinkState.Linked) return;
             if (_clientLinkState != EHubClientLinkState.Connecting &&
@@ -162,6 +166,41 @@ namespace Laps.Core
                 $"(pare-feu UDP {_port}). Même Wi-Fi requis.";
             ClientLinkFailed?.Invoke(_lastConnectionError);
             Debug.LogWarning($"[eHub] {_lastConnectionError}");
+        }
+
+        private void FlushPendingLogs()
+        {
+            while (_pendingLogs.TryDequeue(out var entry))
+            {
+                if (entry.warning)
+                    Debug.LogWarning($"[eHub] {entry.message}");
+                else
+                    Debug.Log($"[eHub] {entry.message}");
+            }
+        }
+
+        private void FlushMainThreadActions()
+        {
+            while (_mainThreadActions.TryDequeue(out Action action))
+            {
+                try
+                {
+                    action?.Invoke();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[eHub] Action différée échouée : {e.Message}");
+                }
+            }
+        }
+
+        private void QueueLog(string message, bool warning = false) =>
+            _pendingLogs.Enqueue((warning, message));
+
+        private void RunOnMainThread(Action action)
+        {
+            if (action != null)
+                _mainThreadActions.Enqueue(action);
         }
 
         private void StartListener()
@@ -229,11 +268,7 @@ namespace Laps.Core
                         continue;
                     }
                     if (msg.senderId == _clientId)
-                    {
-                        LogDropThrottled(ref _lastDropSelfMessageLogMs,
-                            $"DROP écho local {msg.type} (sender={msg.senderId}, self={_clientId})");
-                        continue;
-                    }
+                        continue; // écho broadcast normal (ex. HostBeacon) — pas un problème
 
                     if (msg.type == EHubMessageTypes.Hello)
                     {
@@ -316,7 +351,7 @@ namespace Laps.Core
                         msg.type != EHubMessageTypes.HelloAck &&
                         msg.type != EHubMessageTypes.HostBeacon)
                     {
-                        Debug.Log($"[eHub] RX {msg.type} de {remoteIp} (rôle={_role}, session={msg.sessionId})");
+                        QueueLog($"RX {msg.type} de {remoteIp} (rôle={_role}, session={msg.sessionId})");
                     }
                 }
                 catch (SocketException)
@@ -326,7 +361,7 @@ namespace Laps.Core
                 catch (Exception e)
                 {
                     if (_running)
-                        Debug.LogWarning($"[eHub] Erreur réception : {e.Message}");
+                        QueueLog($"Erreur réception : {e.Message}", warning: true);
                 }
             }
         }
@@ -343,12 +378,12 @@ namespace Laps.Core
                 $"DROP session mismatch depuis {remoteIp} type={msg?.type} msgSession={msg?.sessionId} localSession={_sessionId}");
         }
 
-        private static void LogDropThrottled(ref long lastLogMs, string message)
+        private void LogDropThrottled(ref long lastLogMs, string message)
         {
             long now = NowMs();
             if (now - lastLogMs < 1500) return;
             lastLogMs = now;
-            Debug.LogWarning($"[eHub] {message}");
+            QueueLog(message, warning: true);
         }
 
         private bool IsFromTargetHost(string remoteIp)
@@ -372,8 +407,8 @@ namespace Laps.Core
 
             if (!wasLinked)
             {
-                Debug.Log($"[eHub] Connecté à l'hôte {_hostIp}");
-                ClientLinked?.Invoke();
+                QueueLog($"Connecté à l'hôte {_hostIp}");
+                RunOnMainThread(() => ClientLinked?.Invoke());
             }
         }
 
@@ -391,7 +426,7 @@ namespace Laps.Core
                 if (now - _lastHostConflictLogMs > 5000)
                 {
                     _lastHostConflictLogMs = now;
-                    HostConflictDetected?.Invoke(hostIp);
+                    RunOnMainThread(() => HostConflictDetected?.Invoke(hostIp));
                 }
                 return;
             }
@@ -400,7 +435,7 @@ namespace Laps.Core
             {
                 if (EHubNetworkUtil.IsLoopbackOrSelf(_localIp, hostIp)) return;
                 DiscoveredHostIp = hostIp;
-                HostDiscovered?.Invoke(hostIp);
+                RunOnMainThread(() => HostDiscovered?.Invoke(hostIp));
             }
         }
 
@@ -453,7 +488,7 @@ namespace Laps.Core
             if (!string.IsNullOrEmpty(msg.stringArg) &&
                 !EHubNetworkUtil.IpEquals(msg.stringArg, remoteIp))
             {
-                Debug.Log($"[eHub] Client {remoteIp} (déclaré {msg.stringArg})");
+                QueueLog($"Client {remoteIp} (déclaré {msg.stringArg})");
             }
 
             SendHelloAckTo(clientIp, 1 + CountActiveClients());
@@ -461,10 +496,10 @@ namespace Laps.Core
             bool wantsResync = !string.IsNullOrEmpty(msg.stringArg) &&
                                msg.stringArg.IndexOf("|resync", StringComparison.OrdinalIgnoreCase) >= 0;
             if (isNewClient || wantsResync)
-                ClientJoined?.Invoke(clientIp);
+                RunOnMainThread(() => ClientJoined?.Invoke(clientIp));
 
             if (isNewClient)
-                Debug.Log($"[eHub] Nouveau client : {clientIp}");
+                QueueLog($"Nouveau client : {clientIp}");
         }
 
         private void SendHelloAckTo(string clientIp, int posteCount)
@@ -494,7 +529,7 @@ namespace Laps.Core
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[eHub] Relais vers {clientIp} échoué : {e.Message}");
+                    QueueLog($"Relais vers {clientIp} échoué : {e.Message}", warning: true);
                 }
             }
         }
@@ -676,6 +711,8 @@ namespace Laps.Core
             _thread = null;
             _seenMsgIds.Clear();
             _connectedClients.Clear();
+            while (_pendingLogs.TryDequeue(out _)) { }
+            while (_mainThreadActions.TryDequeue(out _)) { }
         }
     }
 }
