@@ -324,8 +324,12 @@ public class PixelHubBootstrapper : MonoBehaviour
         if (_showTimeline != null) _showTimeline.Stop();
         
         var director = FindObjectOfType<PlayableDirector>();
-        if (director != null && director.state == PlayState.Playing)
+        if (director != null)
+        {
+            director.time = 0;
+            director.Evaluate();
             director.Pause();
+        }
         
         if (_debugPanel != null)
         {
@@ -333,6 +337,10 @@ public class PixelHubBootstrapper : MonoBehaviour
             _debugPanel.SendBlackOut();
             SetProviderWithDevices(_debugPanel);
         }
+        
+        Laps.Core.VideoOverlayCompositor.ClearFrame();
+        Laps.Core.LedFireworks.ClearAll();
+        Laps.Core.LedTextOverlay.ClearAll();
         
         _routingEngine.StartRouting();
         _currentMode = StartMode.Lobby;
