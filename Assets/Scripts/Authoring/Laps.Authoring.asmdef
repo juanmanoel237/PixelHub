@@ -1,0 +1,17 @@
+{
+    "name": "Laps.Authoring",
+    "references": [
+        "Laps.Core",
+        "Laps.Routing",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

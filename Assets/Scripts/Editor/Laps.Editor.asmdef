@@ -1,0 +1,20 @@
+{
+    "name": "Laps.Editor",
+    "references": [
+        "Laps.Core",
+        "Laps.Routing",
+        "Laps.Authoring",
+        "Laps.Bootstrap"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
