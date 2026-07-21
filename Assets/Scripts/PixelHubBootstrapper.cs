@@ -290,7 +290,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     private void EnsureComponents()
     {
         if (_configManager == null)
-            _configManager = FindObjectOfType<ConfigManager>() ?? gameObject.AddComponent<ConfigManager>();
+            _configManager = FindFirstObjectByType<ConfigManager>() ?? gameObject.AddComponent<ConfigManager>();
         if (_routingEngine == null)
             _routingEngine = GetComponent<RoutingEngine>() ?? gameObject.AddComponent<RoutingEngine>();
         if (_showTimeline == null)
@@ -302,7 +302,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         if (_audioReactive == null)
             _audioReactive = GetComponent<AudioReactiveProvider>() ?? gameObject.AddComponent<AudioReactiveProvider>();
         if (_videoCapture == null)
-            _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+            _videoCapture = FindFirstObjectByType<VideoCaptureProvider>();
         if (_otherDevices == null)
             _otherDevices = GetComponent<OtherDevicesPanel>() ?? gameObject.AddComponent<OtherDevicesPanel>();
     }
@@ -344,7 +344,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         _routingEngine.StopRoutingThread();
 
-        var director = FindObjectOfType<PlayableDirector>();
+        var director = FindFirstObjectByType<PlayableDirector>();
         if (director != null)
         {
             var src = director.GetComponent<AudioSource>();
@@ -366,7 +366,7 @@ public class PixelHubBootstrapper : MonoBehaviour
 
     public void SwitchToVideoCapture()
     {
-        if (_videoCapture == null) _videoCapture = FindObjectOfType<VideoCaptureProvider>();
+        if (_videoCapture == null) _videoCapture = FindFirstObjectByType<VideoCaptureProvider>();
         if (_videoCapture == null) return;
 
         _routingEngine.StopRoutingThread();
@@ -451,7 +451,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         directorState = 0;
         GetTimelineSyncState(out timelineState, out timelineTime);
 
-        var director = FindObjectOfType<PlayableDirector>();
+        var director = FindFirstObjectByType<PlayableDirector>();
         if (director != null)
         {
             directorTime = (float)director.time;
@@ -476,7 +476,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         else if (targetMode == StartMode.Manual)
             ApplyDirectorSync(directorTime, directorState);
 
-        var audio = FindObjectOfType<AudioInteractiveManager>();
+        var audio = FindFirstObjectByType<AudioInteractiveManager>();
         audio?.SetPaused(paused, fromNetwork: true);
         RefreshDisplay();
     }
@@ -485,7 +485,7 @@ public class PixelHubBootstrapper : MonoBehaviour
     {
         if (time < 0f) return;
 
-        var director = FindObjectOfType<PlayableDirector>();
+        var director = FindFirstObjectByType<PlayableDirector>();
         if (director == null) return;
 
         director.time = time;
