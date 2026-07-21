@@ -330,6 +330,9 @@ public class PixelHubBootstrapper : MonoBehaviour
             director.Evaluate();
             director.Pause();
         }
+
+        var video = FindObjectOfType<Laps.Authoring.VideoOverlayRenderer>();
+        video?.SetPaused(true);
         
         if (_debugPanel != null)
         {
@@ -357,6 +360,9 @@ public class PixelHubBootstrapper : MonoBehaviour
         var director = FindObjectOfType<PlayableDirector>();
         if (director != null && director.state != PlayState.Playing)
             director.Play();
+
+        var video = FindObjectOfType<Laps.Authoring.VideoOverlayRenderer>();
+        video?.SetPaused(false);
         
         SetProviderWithDevices(_showTimeline);
         _routingEngine.StartRouting();
