@@ -36,6 +36,11 @@ namespace Laps.Core
 
         private static readonly List<Burst> _bursts = new List<Burst>();
 
+        public static void ClearAll()
+        {
+            _bursts.Clear();
+        }
+
         private static readonly Color[] Palette = new Color[]
         {
             new Color(1f, 0.1f, 0.1f),   // Rouge vif
