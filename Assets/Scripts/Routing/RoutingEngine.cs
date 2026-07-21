@@ -300,6 +300,9 @@ namespace Laps.Routing
                 }
             }
 
+            if (!EHubStatus.ShouldOutputToHardware)
+                return;
+
             _artNetSender.BeginFrame();
 
             _universesToSend.Clear();

@@ -10,8 +10,6 @@ namespace Laps.Core
     {
         private const float LumaThreshold = 0.10f;
         private const float LumaSoftness = 0.08f;
-        private const float LumaBoost = 3.0f;   // multiplie la luma pour que les stickmen ressortent
-        private const float BrightBoost = 1.8f; // amplifie les couleurs pour les LEDs
 
         private static Color32[] _pixels;
         private static int _videoWidth;
@@ -51,7 +49,6 @@ namespace Laps.Core
             if (buffer == null || screenWidth <= 0 || screenHeight <= 0)
                 return;
 
-            // Plein largeur, ratio conservé
             float vidW = screenWidth;
             float vidH = vidW / ((float)_videoWidth / _videoHeight);
             if (vidH > screenHeight)
@@ -61,17 +58,12 @@ namespace Laps.Core
             }
 
             int offsetX = (screenWidth - Mathf.RoundToInt(vidW)) / 2;
+            int offsetY = screenHeight - Mathf.RoundToInt(vidH);
             int drawW = Mathf.RoundToInt(vidW);
             int drawH = Mathf.RoundToInt(vidH);
 
-            // CopyToTexturePixels(flipY=true) : state row 0 = HAUT de l'aperçu GUI, row (h-1) = BAS.
-            // Pour ancrer la vidéo en BAS, on la place dans les dernières rows du buffer.
-            // SetFrame a déjà corrigé le flip GPU → _pixels row 0 = haut visuel de la vidéo.
-            int offsetY = screenHeight - drawH; // ancré en bas de l'aperçu GUI
-
             for (int y = 0; y < drawH; y++)
             {
-                // Lecture normale (SetFrame a déjà inversé le readback GPU)
                 int sy = y * _videoHeight / drawH;
                 int by = offsetY + y;
                 if (by < 0 || by >= screenHeight) continue;
@@ -84,15 +76,8 @@ namespace Laps.Core
 
                     Color32 src = _pixels[sy * _videoWidth + sx];
                     float luma = (0.2126f * src.r + 0.7152f * src.g + 0.0722f * src.b) / 255f;
-                    float alpha = Mathf.SmoothStep(LumaThreshold, LumaThreshold + LumaSoftness,
-                                                   Mathf.Clamp01(luma * LumaBoost));
+                    float alpha = Mathf.SmoothStep(LumaThreshold, LumaThreshold + LumaSoftness, luma);
                     if (alpha < 0.01f) continue;
-                    // Boost brightness pour que les stickmen soient bien visibles sur les LEDs
-                    src = new Color32(
-                        (byte)Mathf.Clamp(src.r * BrightBoost, 0, 255),
-                        (byte)Mathf.Clamp(src.g * BrightBoost, 0, 255),
-                        (byte)Mathf.Clamp(src.b * BrightBoost, 0, 255),
-                        255);
 
                     int idx = by * screenWidth + bx;
                     if (idx < 0 || idx >= buffer.Length) continue;

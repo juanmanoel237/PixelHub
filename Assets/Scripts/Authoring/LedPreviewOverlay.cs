@@ -182,12 +182,27 @@ namespace Laps.Authoring
             {
                 if (EHubStatus.Connected)
                 {
-                    string role = EHubStatus.Role == EHubRole.Host ? "Hôte" : $"Client → {EHubStatus.HostIp}";
-                    GUI.Label(new Rect(margin + 8, y, 244, 18),
-                        $"eHub {role} — {EHubStatus.TotalPostes} poste(s)");
+                    if (EHubStatus.Role == EHubRole.Host)
+                    {
+                        GUI.Label(new Rect(margin + 8, y, 244, 18),
+                            $"eHub Hôte — {EHubStatus.TotalPostes} poste(s) — mur LED actif");
+                    }
+                    else
+                    {
+                        GUI.color = new Color(0.7f, 0.9f, 1f);
+                        GUI.Label(new Rect(margin + 8, y, 244, 18),
+                            $"eHub Client → {EHubStatus.HostIp} — aperçu local, LED = hôte");
+                        GUI.color = Color.white;
+                    }
+                }
+                else if (EHubStatus.HostDetectedOnLan)
+                {
+                    GUI.color = new Color(1f, 0.85f, 0.4f);
+                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — hôte détecté, connectez-vous en client");
+                    GUI.color = Color.white;
                 }
                 else
-                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — connectez-vous (panneau bas)");
+                    GUI.Label(new Rect(margin + 8, y, 244, 18), "eHub — 1 hôte + clients (panneau bas)");
                 y += 18;
             }
 
