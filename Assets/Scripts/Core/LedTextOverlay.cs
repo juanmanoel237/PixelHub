@@ -47,16 +47,17 @@ namespace Laps.Core
         private static float _danmarkCompleteTime;
         private static float _danmarkDisplayDuration = 12f;
 
-        // Couleurs par lettre (palette inspirée du drapeau danois : rouge/blanc + néon)
+        // Palette scandinave dramatique (alignée sur Før Vi Går Hjem) :
+        // rouge danois discret + blanc froid + bleu glacier + champagne + magenta prune.
         private static readonly Color[] LetterColors = new Color[]
         {
-            new Color(1f, 0.15f, 0.15f),   // D — Rouge danois
-            new Color(1f, 1f, 0.95f),       // A — Blanc chaud
-            new Color(0.1f, 0.85f, 1f),     // N — Cyan néon
-            new Color(1f, 0.85f, 0f),       // E — Or
-            new Color(0.85f, 0.1f, 1f),     // M — Violet néon
-            new Color(1f, 0.15f, 0.15f),    // R — Rouge danois (2e)
-            new Color(0.1f, 1f, 0.45f),     // K — Vert néon
+            new Color(0.85f, 0.18f, 0.22f),   // D — Rouge danois
+            new Color(0.91f, 0.94f, 1.00f),   // A — Blanc froid
+            new Color(0.29f, 0.66f, 1.00f),   // N — Bleu glacier
+            new Color(0.83f, 0.77f, 0.66f),   // E — Champagne
+            new Color(0.77f, 0.23f, 0.48f),   // M — Magenta prune
+            new Color(0.85f, 0.18f, 0.22f),   // R — Rouge danois
+            new Color(0.29f, 0.66f, 1.00f),   // K — Bleu glacier
         };
 
         // Trajectoire prédéfinie par lettre
@@ -177,8 +178,8 @@ namespace Laps.Core
                 float fadeIn = Mathf.Clamp01(elapsed / 0.5f);
                 float shimmer = 0.85f + 0.15f * Mathf.Sin(Time.time * 4f);
 
-                // Couleur dorée qui brille
-                Color gold = new Color(1f, 0.85f, 0.2f) * shimmer * fadeIn;
+                // Champagne froid — élégance Eurovision, cohérent avec la palette du show
+                Color gold = new Color(0.83f, 0.77f, 0.66f) * shimmer * fadeIn;
 
                 int scale = Mathf.Max(1, Mathf.Min(width / (8 * 6), height / (7 * 4)));
                 int originY = height - 7 * scale - Mathf.Max(1, height / 12);

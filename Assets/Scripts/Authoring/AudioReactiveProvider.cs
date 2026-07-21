@@ -14,11 +14,11 @@ namespace Laps.Authoring
     {
         public enum VisualEffect
         {
-            /// <summary>Style 1 — égaliseur radial propre (cyan/magenta).</summary>
+            /// <summary>Style 1 — égaliseur radial (bleu glacier → magenta).</summary>
             NeonRadial = 0,
-            /// <summary>Style 2 — voiles aurora fluides (bleu/violet).</summary>
+            /// <summary>Style 2 — voiles aurora (bleu nuit → prune).</summary>
             SpiralFlow = 1,
-            /// <summary>Style 3 — anneaux horizon élégants (or/cyan).</summary>
+            /// <summary>Style 3 — anneaux horizon (bleu froid → accent émotionnel).</summary>
             PulseRings = 2,
             ContinentIntro = 3
         }
@@ -86,20 +86,21 @@ namespace Laps.Authoring
         [SerializeField, Range(0f, 1f)] private float _onsetThreshold = 0.12f;
         [SerializeField] private float _onsetCooldownSeconds = 0.10f;
 
-        [Header("Couleurs")]
-        [SerializeField] private Color _baseColor = new Color(0.0f, 0.47f, 1.0f); // bleu
-        [SerializeField] private Color _kickColor = Color.white;
+        [Header("Couleurs — Før Vi Går Hjem (palette scandinave dramatique)")]
+        [SerializeField] private Color _baseColor = new Color(0.29f, 0.66f, 1.0f); // bleu glacier
+        [SerializeField] private Color _kickColor = new Color(0.91f, 0.94f, 1.0f); // blanc froid
         [Tooltip("Luminosité minimale même sans basses (évite un écran tout noir).")]
-        [SerializeField] private float _ambientMin = 0.22f;
+        [SerializeField] private float _ambientMin = 0.18f;
 
         [Header("Style global (3 presets premium)")]
         [Tooltip("Fond noir (recommandé sur mur LED). 'Transparent' n'existe pas sur des LEDs : le noir = éteint.")]
         [SerializeField] private bool _blackBackground = true;
-        [SerializeField] private Color _bgCenter = new Color(0.015f, 0.015f, 0.045f);
-        [SerializeField] private Color _bgEdge = new Color(0.03f, 0.02f, 0.08f);
-        [SerializeField, Range(0.5f, 1f)] private float _neonSaturation = 0.82f;
-        [SerializeField, Range(0.7f, 1.1f)] private float _neonValue = 0.98f;
-        [SerializeField] private float _hueSpeed = 0.045f;
+        // Nuit scandinave : même famille de teinte (bleu nuit → indigo), pas de mélange chaud/froid.
+        [SerializeField] private Color _bgCenter = new Color(0.020f, 0.031f, 0.078f); // #050814
+        [SerializeField] private Color _bgEdge = new Color(0.039f, 0.063f, 0.125f);   // #0A1020
+        [SerializeField, Range(0.5f, 1f)] private float _neonSaturation = 0.78f;
+        [SerializeField, Range(0.7f, 1.1f)] private float _neonValue = 0.96f;
+        [SerializeField] private float _hueSpeed = 0.018f;
 
         [Header("Effet anneau (explosion)")]
         [SerializeField] private float _ringSpeed = 0.9f;       // pixels par seconde (en unités normalisées)
@@ -594,17 +595,27 @@ namespace Laps.Authoring
             public float Val;
         }
 
+        // Palette unique : bleu glacier (froid / distance) → magenta prune (tension émotionnelle).
+        // Les 3 styles partagent la même famille de teintes pour un rendu cohérent et justifiable.
         private static StylePalette GetStylePalette(VisualEffect fx) => fx switch
         {
-            VisualEffect.SpiralFlow => new StylePalette { HueA = 0.56f, HueB = 0.70f, Sat = 0.70f, Val = 0.94f },
-            VisualEffect.PulseRings => new StylePalette { HueA = 0.07f, HueB = 0.53f, Sat = 0.58f, Val = 0.95f },
-            _ => new StylePalette { HueA = 0.52f, HueB = 0.86f, Sat = 0.78f, Val = 0.97f },
+            VisualEffect.SpiralFlow => new StylePalette { HueA = 0.58f, HueB = 0.88f, Sat = 0.68f, Val = 0.92f },
+            VisualEffect.PulseRings => new StylePalette { HueA = 0.55f, HueB = 0.90f, Sat = 0.62f, Val = 0.94f },
+            _ => new StylePalette { HueA = 0.55f, HueB = 0.92f, Sat = 0.76f, Val = 0.97f },
         };
 
+        /// <summary>
+        /// Dégradé HSV borné : on reste toujours entre hueA et hueB (chemin court),
+        /// sans traverser jaune/vert quand la dérive dépasse 1.0.
+        /// </summary>
         private static Color HueGradient(float hueA, float hueB, float t, float sat, float val)
         {
-            float h = Mathf.Lerp(hueA, hueB, Mathf.Clamp01(t));
-            return Color.HSVToRGB(Mathf.Repeat(h, 1f), sat, val);
+            float a = Mathf.Repeat(hueA, 1f);
+            float b = Mathf.Repeat(hueB, 1f);
+            // Chemin court sur le cercle de teintes (évite orange→jaune→vert)
+            float delta = Mathf.Repeat(b - a + 0.5f, 1f) - 0.5f;
+            float h = Mathf.Repeat(a + delta * Mathf.Clamp01(t), 1f);
+            return Color.HSVToRGB(h, sat, val);
         }
 
         private void FillPremiumBackground(float cx, float cy, float invHalf, float pump)
@@ -633,7 +644,7 @@ namespace Laps.Authoring
             }
         }
 
-        /// <summary>Style 1 — Prism Ring : égaliseur radial net, anneau fin, dégradé cyan→magenta.</summary>
+        /// <summary>Style 1 — Prism Ring : égaliseur radial net, anneau fin, dégradé bleu glacier→magenta.</summary>
         private void RenderNeonVisualizer(float bass01, float high01, float dspTime, float kickStrength)
         {
             var pal = GetStylePalette(VisualEffect.NeonRadial);
@@ -643,7 +654,8 @@ namespace Laps.Authoring
             float invHalf = 1f / Mathf.Max(1f, half);
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.5f);
-            float hueDrift = time * _hueSpeed * 0.4f;
+            // Dérive légère bornée : reste dans bleu→magenta, ne dérive jamais vers jaune/vert.
+            float hueDrift = Mathf.Sin(time * Mathf.Max(0.01f, _hueSpeed) * 8f) * 0.035f;
 
             FillPremiumBackground(cx, cy, invHalf, pump);
 
@@ -685,7 +697,7 @@ namespace Laps.Authoring
                         float a = Mathf.SmoothStep(1f, 0f, d / Mathf.Max(0.0001f, _innerRingThickness));
                         if (a > 0f)
                         {
-                            Color c = HueGradient(pal.HueA, pal.HueB, ang01, pal.Sat * 0.9f, pal.Val);
+                            Color c = HueGradient(pal.HueA + hueDrift, pal.HueB + hueDrift, ang01, pal.Sat * 0.9f, pal.Val);
                             outC = Color.Lerp(outC, c, a * (0.35f + 0.4f * high01 + voiceBoost));
                         }
                     }
@@ -723,7 +735,7 @@ namespace Laps.Authoring
             }
         }
 
-        /// <summary>Style 2 — Aurora Veil : voiles lumineux doux, bleu/violet, très fluide.</summary>
+        /// <summary>Style 2 — Aurora Veil : voiles lumineux doux, bleu nuit→prune, très fluide.</summary>
         private void RenderSpiralFlow(float bass01, float high01, float dspTime, float kickStrength)
         {
             var pal = GetStylePalette(VisualEffect.SpiralFlow);
@@ -767,9 +779,10 @@ namespace Laps.Authoring
                     float a = veil * band * (0.25f + 0.55f * pump + 0.35f * v + 0.25f * voice);
                     a = Mathf.Clamp01(a);
 
+                    float hueDrift = Mathf.Sin(time * Mathf.Max(0.01f, _hueSpeed) * 6f) * 0.03f;
                     Color c = HueGradient(
-                        pal.HueA + time * _hueSpeed * 0.25f,
-                        pal.HueB + time * _hueSpeed * 0.15f,
+                        pal.HueA + hueDrift,
+                        pal.HueB + hueDrift,
                         ang01 * 0.6f + r * 0.25f,
                         pal.Sat,
                         pal.Val);
@@ -780,7 +793,7 @@ namespace Laps.Authoring
             }
         }
 
-        /// <summary>Style 3 — Horizon Pulse : anneaux concentriques élégants or/cyan.</summary>
+        /// <summary>Style 3 — Horizon Pulse : anneaux concentriques élégants bleu→magenta.</summary>
         private void RenderPulseRings(float bass01, float high01, float dspTime, float kickStrength)
         {
             var pal = GetStylePalette(VisualEffect.PulseRings);
@@ -790,6 +803,7 @@ namespace Laps.Authoring
             float invHalf = 1f / Mathf.Max(1f, half);
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.5f);
+            float hueDrift = Mathf.Sin(time * Mathf.Max(0.01f, _hueSpeed) * 6f) * 0.03f;
 
             FillPremiumBackground(cx, cy, invHalf, pump);
 
@@ -828,8 +842,8 @@ namespace Laps.Authoring
                     glow = Mathf.Clamp01(glow * 0.85f);
 
                     Color c = HueGradient(
-                        pal.HueA + time * _hueSpeed * 0.2f,
-                        pal.HueB + time * _hueSpeed * 0.1f,
+                        pal.HueA + hueDrift,
+                        pal.HueB + hueDrift,
                         ang01 * 0.4f + pump * 0.2f,
                         _neonSaturation * 0.9f,
                         _neonValue);
@@ -844,9 +858,8 @@ namespace Laps.Authoring
         {
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.55f);
-            float hue = Mathf.Repeat(0.10f + time * 0.06f, 1f);
 
-            // Fond élégant sombre avec léger dégradé radial
+            // Fond nuit scandinave (même famille que le show)
             for (int y = 0; y < _h; y++)
             {
                 for (int x = 0; x < _w; x++)
@@ -854,7 +867,7 @@ namespace Laps.Authoring
                     float dx = (x - _w * 0.5f) / _w;
                     float dy = (y - _h * 0.5f) / _h;
                     float r = Mathf.Sqrt(dx * dx + dy * dy);
-                    Color bg = Color.Lerp(new Color(0.02f, 0.02f, 0.06f), new Color(0.04f, 0.02f, 0.1f), r * 1.2f);
+                    Color bg = Color.Lerp(_bgCenter, _bgEdge, Mathf.Clamp01(r * 1.2f));
                     _state[y * _w + x] = (Color32)bg;
                 }
             }
@@ -864,17 +877,14 @@ namespace Laps.Authoring
 
             if (_introFullPhrase)
             {
-                // ── Finale : phrase complète premium ──
+                // ── Finale : phrase complète — champagne froid (élégance Eurovision) ──
                 float shimmer = 0.88f + 0.12f * Mathf.Sin(time * 3.5f + pump * 5f);
-                Color gold = Color.HSVToRGB(Mathf.Repeat(hue + 0.08f, 1f), 0.45f, 1f) * shimmer;
-                Color cyan = Color.HSVToRGB(Mathf.Repeat(hue + 0.55f, 1f), 0.6f, 0.95f) * shimmer;
+                Color champagne = new Color(0.83f, 0.77f, 0.66f) * shimmer;
 
-                // Double ligne avec léger décalage couleur
                 EffectLibrary.RenderTextTwoLines(
                     _w, _h, _introLine1, _introLine2, _introPhraseScale,
-                    (Color32)gold, _state, int.MaxValue, 1f);
+                    (Color32)champagne, _state, int.MaxValue, 1f);
 
-                // Halo discret autour du texte
                 DrawPhraseHalo(pump, high01, time);
             }
             else if (_introLetters != null && _heroLetterIndex < _introLetters.Length)
@@ -885,16 +895,14 @@ namespace Laps.Authoring
                 int scale = Mathf.Max(1, Mathf.RoundToInt(scaleF));
                 float alpha = Mathf.Clamp01(_introLetterReveal);
 
-                Color letterCol = Color.HSVToRGB(
-                    Mathf.Repeat(hue + _heroLetterIndex * 0.04f, 1f),
-                    0.65f + 0.25f * high01,
-                    0.85f + 0.15f * pump);
+                // Alternance bleu glacier / magenta (tension du thème)
+                float t = (_heroLetterIndex % 2 == 0) ? 0.15f : 0.85f;
+                Color letterCol = HueGradient(0.55f, 0.92f, t, 0.72f, 0.9f + 0.1f * pump);
                 letterCol *= alpha;
 
                 EffectLibrary.RenderSingleCharCentered(
                     _w, _h, ch, scale, (Color32)letterCol, _state, alpha);
 
-                // Anneau néon autour de la lettre
                 DrawLetterRing(pump, high01, alpha);
             }
         }
@@ -932,15 +940,15 @@ namespace Laps.Authoring
 
                 int barH = Mathf.RoundToInt(maxH * v);
                 int bx = x0 + b * (barW + gap);
-                Color pink = new Color(1f, 0.15f, 0.58f);
-                Color pinkDim = new Color(0.28f, 0.04f, 0.16f);
+                Color accent = new Color(0.77f, 0.23f, 0.48f);      // magenta prune
+                Color accentDim = new Color(0.18f, 0.05f, 0.14f);
 
                 for (int sy = 0; sy < barH; sy += segH + segGap)
                 {
                     int segTop = yBase - sy - segH;
                     if (segTop < 0) break;
                     float fade = 1f - (float)sy / Mathf.Max(1, maxH);
-                    FillRect(bx, segTop, barW, segH, Color.Lerp(pinkDim, pink, fade));
+                    FillRect(bx, segTop, barW, segH, Color.Lerp(accentDim, accent, fade));
                 }
 
                 int mirrorH = Mathf.RoundToInt(barH * 0.45f);
@@ -949,7 +957,7 @@ namespace Laps.Authoring
                     int segTop = yBase + sy;
                     if (segTop + segH >= _h) break;
                     float fade = 1f - (float)sy / Mathf.Max(1, mirrorH);
-                    FillRect(bx, segTop, barW, segH, Color.Lerp(Color.black, pink * 0.4f, fade * 0.65f));
+                    FillRect(bx, segTop, barW, segH, Color.Lerp(Color.black, accent * 0.4f, fade * 0.65f));
                 }
             }
         }
@@ -961,7 +969,7 @@ namespace Laps.Authoring
             float radius = _h * 0.28f * (0.85f + 0.2f * pump);
             float thick = 2.5f + 3f * high01;
             float time = Time.time;
-            Color ring = Color.HSVToRGB(Mathf.Repeat(0.10f + time * 0.12f, 1f), 0.75f, 1f);
+            Color ring = Color.HSVToRGB(Mathf.Lerp(0.55f, 0.92f, 0.5f + 0.5f * Mathf.Sin(time * 1.4f)), 0.72f, 1f);
             ring.a = alpha * 0.85f;
 
             for (int y = 0; y < _h; y++)
@@ -983,7 +991,7 @@ namespace Laps.Authoring
             float cx = _w * 0.5f;
             float cy = _h * 0.5f;
             float pulse = 0.5f + 0.5f * Mathf.Sin(time * 2.5f);
-            Color halo = Color.HSVToRGB(Mathf.Repeat(0.10f + time * 0.05f, 1f), 0.35f, 0.35f + 0.25f * pump);
+            Color halo = Color.HSVToRGB(0.58f, 0.28f, 0.32f + 0.22f * pump);
 
             for (int y = 0; y < _h; y++)
             {
@@ -1039,10 +1047,13 @@ namespace Laps.Authoring
 
         private static Color SpectrumBarColor(float ratio)
         {
+            // Bleu glacier → magenta (même logique que le show, plus de vert/jaune/orange)
             ratio = Mathf.Clamp01(ratio);
-            if (ratio < 0.45f) return Color.Lerp(new Color(0.1f, 0.9f, 0.2f), new Color(0.95f, 0.95f, 0.1f), ratio / 0.45f);
-            if (ratio < 0.75f) return Color.Lerp(new Color(0.95f, 0.95f, 0.1f), new Color(1f, 0.45f, 0.05f), (ratio - 0.45f) / 0.3f);
-            return Color.Lerp(new Color(1f, 0.45f, 0.05f), new Color(1f, 0.1f, 0.15f), (ratio - 0.75f) / 0.25f);
+            Color cold = new Color(0.29f, 0.66f, 1.0f);
+            Color mid = new Color(0.55f, 0.35f, 0.85f);
+            Color hot = new Color(0.77f, 0.23f, 0.48f);
+            if (ratio < 0.5f) return Color.Lerp(cold, mid, ratio / 0.5f);
+            return Color.Lerp(mid, hot, (ratio - 0.5f) / 0.5f);
         }
 
         private void FillRect(int x, int y, int w, int h, Color c)

@@ -41,15 +41,15 @@ namespace Laps.Core
             _bursts.Clear();
         }
 
+        // Palette alignée sur Før Vi Går Hjem (bleu glacier / magenta / champagne / rouge danois)
         private static readonly Color[] Palette = new Color[]
         {
-            new Color(1f, 0.1f, 0.1f),   // Rouge vif
-            new Color(0.1f, 1f, 0.1f),   // Vert vif
-            new Color(0.1f, 0.5f, 1f),   // Bleu électrique
-            new Color(1f, 0.85f, 0f),    // Or / Jaune
-            new Color(1f, 0.45f, 0f),    // Orange
-            new Color(0.85f, 0.1f, 1f),  // Violet/Magenta vif
-            new Color(0f, 0.95f, 0.95f)  // Cyan
+            new Color(0.29f, 0.66f, 1.00f), // Bleu glacier
+            new Color(0.77f, 0.23f, 0.48f), // Magenta prune
+            new Color(0.91f, 0.94f, 1.00f), // Blanc froid
+            new Color(0.83f, 0.77f, 0.66f), // Champagne
+            new Color(0.85f, 0.18f, 0.22f), // Rouge danois
+            new Color(0.45f, 0.35f, 0.85f), // Indigo
         };
 
         public static void Trigger(FireworkStyle style = FireworkStyle.ClassicNova, Color? customColor = null, bool forceMulticolor = false)
@@ -101,7 +101,7 @@ namespace Laps.Core
                 {
                     // Par défaut, s'il n'y a pas de couleur personnalisée,
                     // on a 20% de chance d'être multicolore, sinon on prend une couleur de la palette
-                    if (Random.value < 0.20f)
+                    if (Random.value < 0.12f)
                     {
                         isMulticolor = true;
                     }
@@ -130,10 +130,10 @@ namespace Laps.Core
             {
                 Color[] laserColors = new Color[]
                 {
-                    new Color(0.1f, 1f, 0.2f),   // Vert fluo
-                    new Color(0f, 0.95f, 1f),    // Cyan laser
-                    new Color(1f, 0.05f, 0.85f), // Magenta vif
-                    new Color(1f, 0.95f, 0f)     // Jaune laser
+                    new Color(0.29f, 0.66f, 1.00f), // Bleu glacier
+                    new Color(0.77f, 0.23f, 0.48f), // Magenta prune
+                    new Color(0.91f, 0.94f, 1.00f), // Blanc froid
+                    new Color(0.83f, 0.77f, 0.66f)  // Champagne
                 };
                 laserColor = laserColors[Random.Range(0, laserColors.Length)];
             }
@@ -183,8 +183,8 @@ namespace Laps.Core
                     gravityVal = 0f;
                     lifetime = 0.6f; // S'estompe quand elle atteint les bords
                     
-                    // Couleur néon cyan qui tire vers le bleu électrique
-                    pColor = Color.Lerp(new Color(0.1f, 0.7f, 1f), new Color(0f, 0.2f, 1f), Random.value);
+                    // Couleur bleu glacier → indigo (cohérent avec la palette du show)
+                    pColor = Color.Lerp(new Color(0.29f, 0.66f, 1f), new Color(0.45f, 0.35f, 0.85f), Random.value);
                 }
                 else if (style == FireworkStyle.SparkleFountain)
                 {
