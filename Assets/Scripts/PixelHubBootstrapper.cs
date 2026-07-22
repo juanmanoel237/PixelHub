@@ -193,6 +193,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestTestStaticProjector();
         else if (Input.GetKeyDown(KeyCode.F5))
             RequestBlackOutLyres();
+        else if (Input.GetKeyDown(KeyCode.F7))
+            GetComponent<RouterDebugPanel>()?.ToggleVisible();
     }
 
     /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>

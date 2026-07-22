@@ -25,9 +25,6 @@ public class RouterDebugPanel : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.F7))
-            _show = !_show;
-
         if (!_show) return;
 
         _refreshTimer += Time.unscaledDeltaTime;
@@ -40,19 +37,34 @@ public class RouterDebugPanel : MonoBehaviour
 
     private void OnGUI()
     {
+        // F7 via IMGUI : plus fiable que Input.GetKeyDown quand la Game view a le focus.
+        Event e = Event.current;
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F7)
+        {
+            TogglePanel();
+            e.Use();
+        }
+
+        DrawToggleTab();
+
         if (!_show) return;
 
-        const int panelW = 440;
-        const int margin = 10;
-        int panelH = Mathf.Min(Screen.height - margin * 2, 620);
-        float x = margin;
-        float y = margin + 210;
+        GUI.depth = 200;
+
+        const int panelW = 460;
+        const int margin = 12;
+        int panelH = Mathf.Min(Screen.height - margin * 2, 640);
+        float x = (Screen.width - panelW) * 0.5f;
+        float y = (Screen.height - panelH) * 0.5f;
 
         GUI.Box(new Rect(x, y, panelW, panelH), "Routeur — Debug DMX (F7)");
 
         float lineY = y + 22;
-        float innerX = x + 8;
-        float innerW = panelW - 16;
+        float innerX = x + 10;
+        float innerW = panelW - 20;
+
+        if (GUI.Button(new Rect(x + panelW - 78, y + 4, 70, 20), "Fermer"))
+            _show = false;
 
         DrawStatus(innerX, ref lineY, innerW);
         lineY += 6;
@@ -60,12 +72,37 @@ public class RouterDebugPanel : MonoBehaviour
         lineY += 6;
         DrawPixelProbe(innerX, ref lineY, innerW);
         lineY += 6;
-        DrawUniverseList(innerX, ref lineY, innerW, y + panelH - 8);
+        DrawUniverseList(innerX, ref lineY, innerW, y + panelH - 12);
         lineY += 6;
         DrawChannelGrid(innerX, ref lineY, innerW);
 
-        GUI.Label(new Rect(innerX, y + panelH - 22, innerW, 18), "F7 = masquer | Sonde pixel = index LED logique");
+        GUI.depth = 0;
     }
+
+    private void DrawToggleTab()
+    {
+        GUI.depth = 150;
+        const float tabW = 160;
+        const float tabH = 24;
+        float x = Screen.width - tabW - 12;
+        float y = 12;
+
+        if (GUI.Button(new Rect(x, y, tabW, tabH), _show ? "DMX Debug ON (F7)" : "DMX Debug (F7)"))
+            TogglePanel();
+
+        GUI.depth = 0;
+    }
+
+    private void TogglePanel()
+    {
+        _show = !_show;
+        _refreshTimer = 999f;
+        if (_routing != null && _routing.TryGetDebugSnapshot(out RoutingDebugSnapshot snap))
+            _snapshot = snap;
+        Debug.Log($"[RouterDebugPanel] Panneau DMX {(_show ? "ouvert" : "fermé")} — F7 ou bouton en haut à droite.");
+    }
+
+    public void ToggleVisible() => TogglePanel();
 
     private void DrawStatus(float x, ref float y, float w)
     {
@@ -176,7 +213,7 @@ public class RouterDebugPanel : MonoBehaviour
     {
         if (_snapshot.Universes == null || _snapshot.Universes.Count == 0)
         {
-            GUI.Label(new Rect(x, y, w, 18), "Aucun univers DMX actif (tout à zéro).");
+            GUI.Label(new Rect(x, y, w, 18), "Aucun univers DMX actif — testez D+R/G/B ou mode E + Emitter Hub.");
             y += 18;
             return;
         }
