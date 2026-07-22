@@ -74,7 +74,7 @@ namespace Laps.Core
                     Color32 src = _pixels[sy * _videoWidth + sx];
                     float luma = (0.2126f * src.r + 0.7152f * src.g + 0.0722f * src.b) / 255f;
                     float alpha = Mathf.SmoothStep(LumaThreshold, LumaThreshold + LumaSoftness,
-                                                   Mathf.Clamp01(luma * LumaBoost));
+                                                   Mathf.Clamp01(luma * LumaBoost)) * (src.a / 255f);
                     if (alpha < 0.01f) continue;
                     // Boost brightness pour que la neige soit bien visible sur les LEDs
                     src = new Color32(

@@ -520,9 +520,39 @@ public class PixelHubBootstrapper : MonoBehaviour
         _previewOverlay?.ForceRefresh();
     }
 
-    public void PlayShow()    => _showTimeline?.Play();
-    public void PauseShow()   => _showTimeline?.Pause();
-    public void StopShow()    => _showTimeline?.Stop();
+    public void PlayShow()
+    {
+        _showTimeline?.Play();
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null && director.state != PlayState.Playing)
+            director.Play();
+    }
+
+    public void PauseShow()
+    {
+        _showTimeline?.Pause();
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null && director.state == PlayState.Playing)
+            director.Pause();
+    }
+
+    public void StopShow()
+    {
+        _showTimeline?.Stop();
+        var director = FindObjectOfType<PlayableDirector>();
+        if (director != null)
+        {
+            director.time = 0;
+            director.Evaluate();
+            director.Stop();
+        }
+        Laps.Core.VideoOverlayCompositor.ClearFrame();
+        Laps.Core.ConfettiOverlayCompositor.ClearFrame();
+        Laps.Core.NeigeOverlayCompositor.ClearFrame();
+        Laps.Core.MaisonsOverlayCompositor.ClearFrame();
+        Laps.Core.FlashOverlayCompositor.ClearFrame();
+        Laps.Core.EclatOverlayCompositor.ClearFrame();
+    }
 
     public void RequestPlayShow()
     {

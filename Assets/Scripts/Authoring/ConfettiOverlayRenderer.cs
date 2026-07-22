@@ -155,14 +155,16 @@ namespace Laps.Authoring
             if (_errorLogged) return;
             _errorLogged = true;
             Debug.LogWarning(
-                "[ConfettiOverlayRenderer] Vidéo confetti illisible (souvent codec HEVC manquant). " +
-                "Installez « HEVC Video Extensions » ou placez confetti_overlay.mp4 (H.264) dans StreamingAssets. " +
+                "[ConfettiOverlayRenderer] Vidéo confetti illisible. " +
+                "Placez confetti_overlay.webm (VP8+alpha) ou .mp4 (H.264) dans StreamingAssets. " +
                 $"Détail : {message}");
         }
 
         private static string ResolveVideoUrl(string baseName)
         {
             string dir = Application.streamingAssetsPath;
+            string webm = System.IO.Path.Combine(dir, baseName + ".webm");
+            if (System.IO.File.Exists(webm)) return webm;
             string mp4 = System.IO.Path.Combine(dir, baseName + ".mp4");
             if (System.IO.File.Exists(mp4)) return mp4;
             return System.IO.Path.Combine(dir, baseName + ".mov");
