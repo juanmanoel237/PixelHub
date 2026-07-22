@@ -4,7 +4,8 @@ using Laps.Core;
 using Laps.Routing;
 
 /// <summary>
-/// Panneau debug routage (F7) : univers DMX, canaux actifs, entités eHuB, sonde pixel.
+/// Panneau debug routage : univers DMX, canaux actifs, entités eHuB, sonde pixel.
+/// Touche U (pas F7) pour afficher / masquer — compatible Mac / PC.
 /// </summary>
 public class RouterDebugPanel : MonoBehaviour
 {
@@ -47,12 +48,16 @@ public class RouterDebugPanel : MonoBehaviour
 
     private void OnGUI()
     {
-        // F7 via IMGUI : plus fiable que Input.GetKeyDown quand la Game view a le focus.
+        // Touche U via IMGUI : fiable en Game view (Mac + PC, sans F-keys).
         Event e = Event.current;
-        if (e.type == EventType.KeyDown &&
-            (e.keyCode == KeyCode.F7 || e.keyCode == KeyCode.LeftBracket))
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.U)
         {
             TogglePanel();
+            e.Use();
+        }
+        if (_show && e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
+        {
+            _show = false;
             e.Use();
         }
 
@@ -66,7 +71,7 @@ public class RouterDebugPanel : MonoBehaviour
         float x = (Screen.width - panelW) * 0.5f;
         float y = (Screen.height - panelH) * 0.5f;
 
-        GUI.Box(new Rect(x, y, panelW, panelH), "Routeur — Debug DMX (F7)");
+        GUI.Box(new Rect(x, y, panelW, panelH), "Routeur — Debug DMX (touche U)");
 
         float lineY = y + 22;
         float innerX = x + 10;
@@ -94,7 +99,7 @@ public class RouterDebugPanel : MonoBehaviour
         _refreshTimer = 999f;
         if (_routing != null && _routing.TryGetDebugSnapshot(out RoutingDebugSnapshot snap))
             _snapshot = snap;
-        Debug.Log($"[RouterDebugPanel] Panneau DMX {(_show ? "ouvert" : "fermé")} — F7, [ ou bouton « Debug DMX ».");
+        Debug.Log($"[RouterDebugPanel] Panneau DMX {(_show ? "ouvert" : "fermé")} — touche U ou bouton « Debug DMX ».");
     }
 
     public void ToggleVisible() => TogglePanel();
