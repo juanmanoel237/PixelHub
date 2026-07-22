@@ -189,8 +189,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : T=timeline | D=debug | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → Tests couleur : 1=1ère LED | R/G/B | 0=off (Ctrl+1..4 = lyre DMX)");
         Debug.Log("[PixelHubBootstrapper] → eHub : 1 HÔTE (mur LED) + clients (télécommande) — panneau bas.");
-        Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
-        Debug.Log("[PixelHubBootstrapper] → F7 = debug DMX (univers, canaux, entités eHuB).");
+        Debug.Log("[PixelHubBootstrapper] → I = panneau config routeur (IP contrôleurs BC216).");
+        Debug.Log("[PixelHubBootstrapper] → U = debug DMX (univers, canaux, entités eHuB).");
     }
 
     private void Update()
@@ -233,10 +233,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestTestStaticProjector();
         else if (Input.GetKeyDown(KeyCode.F5))
             RequestBlackOutLyres();
-        else if (Input.GetKeyDown(KeyCode.F6) || Input.GetKeyDown(KeyCode.RightBracket))
-            GetComponent<RouterConfigPanel>()?.ToggleVisible();
-        else if (Input.GetKeyDown(KeyCode.F7) || Input.GetKeyDown(KeyCode.LeftBracket))
-            GetComponent<RouterDebugPanel>()?.ToggleVisible();
+        // I / U : gérés par RouterConfigPanel / RouterDebugPanel (OnGUI, Mac+PC)
     }
 
     /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>

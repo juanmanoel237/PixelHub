@@ -3,7 +3,7 @@ using Laps.Core;
 
 /// <summary>
 /// Panneau OnGUI P1 : édition des IP contrôleurs + rechargement config routeur.
-/// Touche F6 pour afficher / masquer.
+/// Touche I (pas F6) pour afficher / masquer — compatible Mac / PC.
 /// </summary>
 public class RouterConfigPanel : MonoBehaviour
 {
@@ -35,16 +35,10 @@ public class RouterConfigPanel : MonoBehaviour
         ConfigManager.OnConfigReloaded -= SyncFieldsFromConfig;
     }
 
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.F6) || Input.GetKeyDown(KeyCode.RightBracket))
-            ToggleVisible();
-    }
-
     public void ToggleVisible()
     {
         _show = !_show;
-        Debug.Log($"[RouterConfigPanel] Panneau config {(_show ? "ouvert" : "fermé")} — F6 ou touche ]");
+        Debug.Log($"[RouterConfigPanel] Panneau config {(_show ? "ouvert" : "fermé")} — touche I ou bouton « Config IP »");
     }
 
     private void SyncFieldsFromConfig()
@@ -63,10 +57,16 @@ public class RouterConfigPanel : MonoBehaviour
     private void OnGUI()
     {
         Event ev = Event.current;
-        if (ev.type == EventType.KeyDown &&
-            (ev.keyCode == KeyCode.F6 || ev.keyCode == KeyCode.RightBracket))
+        // Ignore I pendant la saisie d'une IP (TextField a le focus).
+        if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.I && GUIUtility.keyboardControl == 0)
         {
             ToggleVisible();
+            ev.Use();
+        }
+        if (_show && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Escape)
+        {
+            _show = false;
+            GUIUtility.keyboardControl = 0;
             ev.Use();
         }
 
@@ -80,7 +80,7 @@ public class RouterConfigPanel : MonoBehaviour
         float x = (Screen.width - panelW) * 0.5f;
         float y = (Screen.height - panelH) * 0.5f;
 
-        GUI.Box(new Rect(x, y, panelW, panelH), "Routeur — Config (F6 ou ])");
+        GUI.Box(new Rect(x, y, panelW, panelH), "Routeur — Config (touche I)");
 
         if (GUI.Button(new Rect(x + panelW - 78, y + 4, 70, 20), "Fermer"))
             _show = false;
@@ -185,7 +185,7 @@ public class RouterConfigPanel : MonoBehaviour
             ReloadFromDisk();
 
         y += 32;
-        GUI.Label(new Rect(x, y, w, 18), "F6 ou ] = masquer | Recharger JSON = disque");
+        GUI.Label(new Rect(x, y, w, 18), "I ou Esc = masquer | Recharger JSON = disque");
         y += 18;
     }
 

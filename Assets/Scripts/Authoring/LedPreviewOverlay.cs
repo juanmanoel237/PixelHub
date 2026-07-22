@@ -125,9 +125,9 @@ namespace Laps.Authoring
             GUI.Label(new Rect(margin + 8, y, 244, 18), $"Mode : {_modeLabel}");
             y += 20;
 
-            if (GUI.Button(new Rect(margin + 8, y, 128, 24), "Config IP"))
+            if (GUI.Button(new Rect(margin + 8, y, 128, 24), "Config IP (I)"))
                 RouterPanelBus.RequestToggleConfig();
-            if (GUI.Button(new Rect(margin + 142, y, 128, 24), "Debug DMX"))
+            if (GUI.Button(new Rect(margin + 142, y, 128, 24), "Debug DMX (U)"))
                 RouterPanelBus.RequestToggleDebug();
             y += 28;
 
@@ -254,7 +254,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 22, Screen.width - margin * 2, 20),
-                "Mur:R/G/B/0/1 | Lyres:F1–F4 | Config= bouton ou F6/] | DMX= bouton ou F7/[ | T/E/A/V | eHub bas");
+                "Mur:R/G/B/0/1 | Lyres:6–9 | Config=I | Debug DMX=U | T/E/A/V | eHub bas");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
