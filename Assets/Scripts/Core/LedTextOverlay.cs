@@ -43,7 +43,7 @@ namespace Laps.Core
             _danmarkComplete = false;
         }
 
-        // État "DANMARK complet" — le mot reste affiché en bas
+        // État "DANMARK complet" — le mot reste affiché au centre
         private static bool _danmarkComplete;
         private static float _danmarkCompleteTime;
         private static float _danmarkDisplayDuration = 12f;
@@ -122,7 +122,7 @@ namespace Laps.Core
             });
         }
 
-        /// <summary>Signale que le mot complet doit s'afficher en bas.</summary>
+        /// <summary>Signale que le mot complet doit s'afficher au centre.</summary>
         public static void SetDanmarkComplete(bool complete)
         {
             if (complete && !_danmarkComplete)
@@ -209,7 +209,7 @@ namespace Laps.Core
                 RenderCharAt(buffer, width, height, l.Character, l.Scale, fg, px, py);
             }
 
-            // 2. Mot "DANEMARK" complet en bas
+            // 2. Mot "DANEMARK" complet au centre
             if (_danmarkComplete)
             {
                 float elapsed = Time.time - _danmarkCompleteTime;
@@ -220,7 +220,8 @@ namespace Laps.Core
                 Color red = new Color(1f, 0.1f, 0.1f) * shimmer * fadeIn;
 
                 int scale = Mathf.Max(1, Mathf.Min(width / (8 * 6), height / (7 * 4)));
-                int originY = height - 7 * scale - Mathf.Max(1, height / 12);
+                int glyphH = 7 * scale;
+                int originY = (height - glyphH) / 2;
 
                 RenderTextAtY(buffer, width, height, "danemark", scale, (Color32)red, originY);
             }
