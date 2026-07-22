@@ -100,7 +100,7 @@ namespace Laps.Authoring
             _videoPlayer = gameObject.AddComponent<VideoPlayer>();
             _videoPlayer.playOnAwake = false;
             _videoPlayer.source = VideoSource.Url;
-            _videoPlayer.url = System.IO.Path.Combine(Application.streamingAssetsPath, "eclaire_gauche_overlay.mov");
+            _videoPlayer.url = ResolveVideoUrl("eclaire_gauche_overlay");
             _videoPlayer.isLooping = true;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
@@ -125,7 +125,22 @@ namespace Laps.Authoring
         }
 
         private void OnError(VideoPlayer vp, string message)
-            => Debug.LogError($"[EclaireGaucheOverlayRenderer] Erreur vidéo : {message}");
+        {
+            Debug.LogWarning(
+                "[EclaireGaucheOverlayRenderer] Vidéo éclair gauche illisible. " +
+                "Placez eclaire_gauche_overlay.webm (VP8+alpha) ou .mp4 (H.264) dans StreamingAssets. " +
+                $"Détail : {message}");
+        }
+
+        private static string ResolveVideoUrl(string baseName)
+        {
+            string dir = Application.streamingAssetsPath;
+            string webm = System.IO.Path.Combine(dir, baseName + ".webm");
+            if (System.IO.File.Exists(webm)) return webm;
+            string mp4 = System.IO.Path.Combine(dir, baseName + ".mp4");
+            if (System.IO.File.Exists(mp4)) return mp4;
+            return System.IO.Path.Combine(dir, baseName + ".mov");
+        }
 
         private void CleanupVideo()
         {
