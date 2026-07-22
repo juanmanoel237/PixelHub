@@ -88,7 +88,9 @@ namespace Laps.Authoring
         private void OnReadbackComplete(AsyncGPUReadbackRequest request)
         {
             _readbackPending = false;
-            if (request.hasError || !_videoReady) return;
+            // Si l'objet a été désactivé pendant le readback GPU, on ignore le résultat
+            // pour éviter que les pixels "collent" après la fin de l'Activation Track.
+            if (request.hasError || !_videoReady || !gameObject.activeInHierarchy) return;
 
             var data = request.GetData<Color32>();
             if (_pixelBuffer == null || _pixelBuffer.Length != data.Length)
