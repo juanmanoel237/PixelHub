@@ -23,6 +23,16 @@ public class RouterDebugPanel : MonoBehaviour
         _ehubReceiver = FindObjectOfType<EHubReceiver>();
     }
 
+    private void OnEnable()
+    {
+        RouterPanelBus.ToggleDebugRequested += ToggleVisible;
+    }
+
+    private void OnDisable()
+    {
+        RouterPanelBus.ToggleDebugRequested -= ToggleVisible;
+    }
+
     private void Update()
     {
         if (!_show) return;
@@ -39,13 +49,12 @@ public class RouterDebugPanel : MonoBehaviour
     {
         // F7 via IMGUI : plus fiable que Input.GetKeyDown quand la Game view a le focus.
         Event e = Event.current;
-        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F7)
+        if (e.type == EventType.KeyDown &&
+            (e.keyCode == KeyCode.F7 || e.keyCode == KeyCode.LeftBracket))
         {
             TogglePanel();
             e.Use();
         }
-
-        DrawToggleTab();
 
         if (!_show) return;
 
@@ -79,27 +88,13 @@ public class RouterDebugPanel : MonoBehaviour
         GUI.depth = 0;
     }
 
-    private void DrawToggleTab()
-    {
-        GUI.depth = 150;
-        const float tabW = 160;
-        const float tabH = 24;
-        float x = Screen.width - tabW - 12;
-        float y = 12;
-
-        if (GUI.Button(new Rect(x, y, tabW, tabH), _show ? "DMX Debug ON (F7)" : "DMX Debug (F7)"))
-            TogglePanel();
-
-        GUI.depth = 0;
-    }
-
     private void TogglePanel()
     {
         _show = !_show;
         _refreshTimer = 999f;
         if (_routing != null && _routing.TryGetDebugSnapshot(out RoutingDebugSnapshot snap))
             _snapshot = snap;
-        Debug.Log($"[RouterDebugPanel] Panneau DMX {(_show ? "ouvert" : "fermé")} — F7 ou bouton en haut à droite.");
+        Debug.Log($"[RouterDebugPanel] Panneau DMX {(_show ? "ouvert" : "fermé")} — F7, [ ou bouton « Debug DMX ».");
     }
 
     public void ToggleVisible() => TogglePanel();

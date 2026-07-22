@@ -193,7 +193,9 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestTestStaticProjector();
         else if (Input.GetKeyDown(KeyCode.F5))
             RequestBlackOutLyres();
-        else if (Input.GetKeyDown(KeyCode.F7))
+        else if (Input.GetKeyDown(KeyCode.F6) || Input.GetKeyDown(KeyCode.RightBracket))
+            GetComponent<RouterConfigPanel>()?.ToggleVisible();
+        else if (Input.GetKeyDown(KeyCode.F7) || Input.GetKeyDown(KeyCode.LeftBracket))
             GetComponent<RouterDebugPanel>()?.ToggleVisible();
     }
 

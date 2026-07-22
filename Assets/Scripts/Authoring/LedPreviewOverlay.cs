@@ -123,7 +123,13 @@ namespace Laps.Authoring
 
             float y = margin + 22;
             GUI.Label(new Rect(margin + 8, y, 244, 18), $"Mode : {_modeLabel}");
-            y += 18;
+            y += 20;
+
+            if (GUI.Button(new Rect(margin + 8, y, 128, 24), "Config IP"))
+                RouterPanelBus.RequestToggleConfig();
+            if (GUI.Button(new Rect(margin + 142, y, 128, 24), "Debug DMX"))
+                RouterPanelBus.RequestToggleDebug();
+            y += 28;
 
             if (_provider is AudioReactiveProvider audio)
             {
@@ -248,7 +254,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 22, Screen.width - margin * 2, 20),
-                "Mur:R/G/B/0/1 | Lyres:F1–F4 F2=panneau F3=beat | F6=IP F7=DMX | T/E/A/V | Espace=pause | eHub bas-gauche");
+                "Mur:R/G/B/0/1 | Lyres:F1–F4 | Config= bouton ou F6/] | DMX= bouton ou F7/[ | T/E/A/V | eHub bas");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
