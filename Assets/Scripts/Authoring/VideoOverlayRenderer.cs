@@ -24,6 +24,7 @@ namespace Laps.Authoring
         private Color32[] _pixelBuffer;
         private int _pixelWidth;
         private int _pixelHeight;
+        private bool _errorLogged;
 
         /// <summary>La RenderTexture de la vidéo, null tant qu'elle n'est pas prête.</summary>
         public RenderTexture VideoTexture => _videoReady ? _videoRT : null;
@@ -123,7 +124,7 @@ namespace Laps.Authoring
             _videoPlayer = gameObject.AddComponent<VideoPlayer>();
             _videoPlayer.playOnAwake = false;
             _videoPlayer.source = VideoSource.Url;
-            _videoPlayer.url = System.IO.Path.Combine(Application.streamingAssetsPath, "combat_overlay.mov");
+            _videoPlayer.url = ResolveVideoUrl("combat_overlay");
             _videoPlayer.isLooping = true;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
@@ -154,7 +155,20 @@ namespace Laps.Authoring
 
         private void OnError(VideoPlayer vp, string message)
         {
-            Debug.LogError($"[VideoOverlayRenderer] Erreur vidéo : {message}");
+            if (_errorLogged) return;
+            _errorLogged = true;
+            Debug.LogWarning(
+                "[VideoOverlayRenderer] Vidéo combat illisible (souvent codec HEVC manquant). " +
+                "Installez « HEVC Video Extensions » (Microsoft Store) ou placez combat_overlay.mp4 (H.264) dans StreamingAssets. " +
+                $"Détail : {message}");
+        }
+
+        private static string ResolveVideoUrl(string baseName)
+        {
+            string dir = Application.streamingAssetsPath;
+            string mp4 = System.IO.Path.Combine(dir, baseName + ".mp4");
+            if (System.IO.File.Exists(mp4)) return mp4;
+            return System.IO.Path.Combine(dir, baseName + ".mov");
         }
 
         private void CleanupVideo()
