@@ -69,7 +69,7 @@ namespace Laps.Authoring
         private void OnReadbackComplete(AsyncGPUReadbackRequest request)
         {
             _readbackPending = false;
-            if (request.hasError || !_videoReady) return;
+            if (request.hasError || !_videoReady || !gameObject.activeInHierarchy) return;
 
             var data = request.GetData<Color32>();
             if (_pixelBuffer == null || _pixelBuffer.Length != data.Length)
