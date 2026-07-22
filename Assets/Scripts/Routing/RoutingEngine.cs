@@ -164,6 +164,10 @@ namespace Laps.Routing
                         LedTextOverlay.CompositeOnto(_writeBuffer, w, h);
                         VideoOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         ConfettiOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        NeigeOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        MaisonsOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        FlashOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        EclatOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         if (map.flipY) LedBufferTransforms.FlipBufferY(_writeBuffer, w, h);
                         if (map.flipX) LedBufferTransforms.FlipBufferX(_writeBuffer, w, h);
                     }

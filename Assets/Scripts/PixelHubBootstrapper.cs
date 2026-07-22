@@ -81,6 +81,46 @@ public class PixelHubBootstrapper : MonoBehaviour
             confettiOverlayGO.transform.SetParent(transform);
             confettiOverlayGO.AddComponent<Laps.Authoring.ConfettiOverlayRenderer>();
         }
+
+        // Troisième overlay : neige
+        // Si un NeigeOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.NeigeOverlayRenderer>(true) == null)
+        {
+            var neigeOverlayGO = new GameObject("NeigeOverlayRenderer");
+            neigeOverlayGO.transform.SetParent(transform);
+            neigeOverlayGO.AddComponent<Laps.Authoring.NeigeOverlayRenderer>();
+        }
+
+        // Quatrième overlay : maisons
+        // Si un MaisonsOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.MaisonsOverlayRenderer>(true) == null)
+        {
+            var maisonsOverlayGO = new GameObject("MaisonsOverlayRenderer");
+            maisonsOverlayGO.transform.SetParent(transform);
+            maisonsOverlayGO.AddComponent<Laps.Authoring.MaisonsOverlayRenderer>();
+        }
+
+        // Cinquième overlay : flash
+        // Si un FlashOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.FlashOverlayRenderer>(true) == null)
+        {
+            var flashOverlayGO = new GameObject("FlashOverlayRenderer");
+            flashOverlayGO.transform.SetParent(transform);
+            flashOverlayGO.AddComponent<Laps.Authoring.FlashOverlayRenderer>();
+        }
+
+        // Sixième overlay : éclat
+        // Si un EclatOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.EclatOverlayRenderer>(true) == null)
+        {
+            var eclatOverlayGO = new GameObject("EclatOverlayRenderer");
+            eclatOverlayGO.transform.SetParent(transform);
+            eclatOverlayGO.AddComponent<Laps.Authoring.EclatOverlayRenderer>();
+        }
     }
 
     private void Start()
