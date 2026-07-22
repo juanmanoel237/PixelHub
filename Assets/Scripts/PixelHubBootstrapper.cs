@@ -54,6 +54,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             gameObject.AddComponent<EHubControlPanel>();
         if (GetComponent<RouterConfigPanel>() == null)
             gameObject.AddComponent<RouterConfigPanel>();
+        if (GetComponent<RouterDebugPanel>() == null)
+            gameObject.AddComponent<RouterDebugPanel>();
 
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
@@ -148,6 +150,7 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] → Tests couleur : 1=1ère LED | R/G/B | 0=off (Ctrl+1..4 = lyre DMX)");
         Debug.Log("[PixelHubBootstrapper] → eHub : 1 HÔTE (mur LED) + clients (télécommande) — panneau bas.");
         Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
+        Debug.Log("[PixelHubBootstrapper] → F7 = debug DMX (univers, canaux, entités eHuB).");
     }
 
     private void Update()

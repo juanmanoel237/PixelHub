@@ -248,7 +248,7 @@ namespace Laps.Authoring
             }
 
             GUI.Label(new Rect(margin, Screen.height - 22, Screen.width - margin * 2, 20),
-                "Mur:R/G/B/0/1 | Lyres:F1–F4 F2=panneau F3=beat | F6=IP | T/E/A/V | Espace=pause | eHub bas-gauche");
+                "Mur:R/G/B/0/1 | Lyres:F1–F4 F2=panneau F3=beat | F6=IP F7=DMX | T/E/A/V | Espace=pause | eHub bas-gauche");
         }
 
         private static void DrawBar(Rect rect, float value01, ref float peak, Color fill, string label)
