@@ -54,6 +54,21 @@ namespace Laps.Routing
         public float  RoutingFps { get; private set; }
         public float  RoutingMs  { get; private set; }
 
+        public PixelMapping Mapping => _pixelMapping;
+
+        private readonly object _debugLock = new object();
+        private RoutingDebugSnapshot _debugSnapshot = new RoutingDebugSnapshot();
+
+        /// <summary>Dernier instantané DMX (panneau debug F7).</summary>
+        public bool TryGetDebugSnapshot(out RoutingDebugSnapshot snapshot)
+        {
+            lock (_debugLock)
+            {
+                snapshot = CloneDebugSnapshot(_debugSnapshot);
+                return snapshot != null;
+            }
+        }
+
         /// <summary>État LED final (animation + feux d'artifice) tel qu'envoyé en Art-Net.</summary>
         public bool TryGetDisplaySnapshot(out Color32[] snapshot)
         {
@@ -164,6 +179,10 @@ namespace Laps.Routing
                         LedTextOverlay.CompositeOnto(_writeBuffer, w, h);
                         VideoOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         ConfettiOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        NeigeOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        MaisonsOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        FlashOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        EclatOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         if (map.flipY) LedBufferTransforms.FlipBufferY(_writeBuffer, w, h);
                         if (map.flipX) LedBufferTransforms.FlipBufferX(_writeBuffer, w, h);
                     }
@@ -301,6 +320,8 @@ namespace Laps.Routing
                 }
             }
 
+            CaptureDebugSnapshot(state, entities, config);
+
             if (!EHubStatus.ShouldOutputToHardware)
                 return;
 
@@ -395,6 +416,131 @@ namespace Laps.Routing
             for (int i = 0; i < dmxData.Length; i++)
                 if (dmxData[i] != 0) return true;
             return false;
+        }
+
+        private void CaptureDebugSnapshot(Color32[] state, IReadOnlyList<EntityColor> entities, AppConfig config)
+        {
+            var snap = new RoutingDebugSnapshot
+            {
+                HardwareOutputEnabled = EHubStatus.ShouldOutputToHardware,
+                PacketsPerSecond = PacketsPerSecond,
+                PacketsSentTotal = PacketsSentTotal,
+                RoutingFps = RoutingFps
+            };
+
+            bool entityMode = entities != null && entities.Count > 0 &&
+                              ConfigManager.EntityMap != null && ConfigManager.EntityMap.Count > 0;
+            if (entityMode)
+            {
+                snap.Mode = RoutingDebugMode.Entity;
+                snap.EntityReceived = entities.Count;
+                var unmapped = new List<int>(8);
+                for (int i = 0; i < entities.Count; i++)
+                {
+                    if (ConfigManager.EntityMap.TryGet(entities[i].id, out _))
+                        snap.EntityMapped++;
+                    else if (unmapped.Count < 8)
+                        unmapped.Add(entities[i].id);
+                }
+                snap.EntityUnmapped = snap.EntityReceived - snap.EntityMapped;
+                snap.UnmappedEntityIds = unmapped.ToArray();
+            }
+            else if (state != null)
+            {
+                snap.Mode = RoutingDebugMode.Pixel;
+            }
+
+            if (_pixelMapping?.PixelMap != null && _pixelMapping.PixelMap.Length > 0 &&
+                _pixelMapping.PixelMap[0].controllerIndex >= 0)
+            {
+                snap.HasFirstPixelAddress = true;
+                snap.FirstPixelAddress = _pixelMapping.PixelMap[0];
+            }
+
+            if (config?.network?.controllers != null)
+            {
+                foreach (var kvp in _dmxBuffers)
+                {
+                    byte[] buf = kvp.Value;
+                    if (buf == null || !HasNonZeroData(buf)) continue;
+
+                    int ctrl = kvp.Key >> 16;
+                    int universe = kvp.Key & 0xFFFF;
+                    int active = 0;
+                    int first = -1;
+                    for (int i = 0; i < buf.Length; i++)
+                    {
+                        if (buf[i] == 0) continue;
+                        active++;
+                        if (first < 0) first = i;
+                    }
+
+                    string ip = ctrl >= 0 && ctrl < config.network.controllers.Length
+                        ? config.network.controllers[ctrl].ip ?? "?"
+                        : "?";
+
+                    snap.Universes.Add(new DmxUniverseSummary
+                    {
+                        key = kvp.Key,
+                        controllerIndex = ctrl,
+                        universe = universe,
+                        controllerIp = ip,
+                        activeChannelCount = active,
+                        firstActiveChannel = first
+                    });
+
+                    var copy = new byte[512];
+                    Array.Copy(buf, copy, 512);
+                    snap.DmxBuffers[kvp.Key] = copy;
+                }
+            }
+
+            snap.Universes.Sort((a, b) =>
+            {
+                int c = a.controllerIndex.CompareTo(b.controllerIndex);
+                return c != 0 ? c : a.universe.CompareTo(b.universe);
+            });
+            snap.ActiveUniverseCount = snap.Universes.Count;
+
+            lock (_debugLock)
+            {
+                _debugSnapshot = snap;
+            }
+        }
+
+        private static RoutingDebugSnapshot CloneDebugSnapshot(RoutingDebugSnapshot src)
+        {
+            if (src == null) return new RoutingDebugSnapshot();
+
+            var clone = new RoutingDebugSnapshot
+            {
+                Mode = src.Mode,
+                HardwareOutputEnabled = src.HardwareOutputEnabled,
+                PacketsPerSecond = src.PacketsPerSecond,
+                PacketsSentTotal = src.PacketsSentTotal,
+                RoutingFps = src.RoutingFps,
+                ActiveUniverseCount = src.ActiveUniverseCount,
+                EntityReceived = src.EntityReceived,
+                EntityMapped = src.EntityMapped,
+                EntityUnmapped = src.EntityUnmapped,
+                UnmappedEntityIds = src.UnmappedEntityIds != null
+                    ? (int[])src.UnmappedEntityIds.Clone()
+                    : Array.Empty<int>(),
+                FirstPixelAddress = src.FirstPixelAddress,
+                HasFirstPixelAddress = src.HasFirstPixelAddress
+            };
+
+            foreach (var u in src.Universes)
+                clone.Universes.Add(u);
+
+            foreach (var kvp in src.DmxBuffers)
+            {
+                var copy = new byte[512];
+                Array.Copy(kvp.Value, copy, 512);
+                clone.DmxBuffers[kvp.Key] = copy;
+            }
+
+            return clone;
         }
 
         private LyreConfig FindLyreConfig(string name, AppConfig config)

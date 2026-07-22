@@ -639,7 +639,7 @@ namespace Laps.Authoring
             var pal = GetStylePalette(VisualEffect.NeonRadial);
             float half = Mathf.Max(_w, _h) * 0.5f;
             float cx = (_w - 1) * 0.5f;
-            float cy = (_h - 1) * 0.5f;
+            float cy = (_h - 1) * 0.35f; // Décalé vers le haut
             float invHalf = 1f / Mathf.Max(1f, half);
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.5f);
@@ -685,7 +685,7 @@ namespace Laps.Authoring
                         float a = Mathf.SmoothStep(1f, 0f, d / Mathf.Max(0.0001f, _innerRingThickness));
                         if (a > 0f)
                         {
-                            Color c = HueGradient(pal.HueA, pal.HueB, ang01, pal.Sat * 0.9f, pal.Val);
+                            Color c = Color.Lerp(Color.red, Color.white, Mathf.PingPong(ang01 * 2f + time * 0.3f, 1f));
                             outC = Color.Lerp(outC, c, a * (0.35f + 0.4f * high01 + voiceBoost));
                         }
                     }
@@ -705,7 +705,7 @@ namespace Laps.Authoring
                             edge = Mathf.Clamp01(edge);
                             float tipGlow = Mathf.Pow(along, 1.2f);
                             float a = edge * (0.22f + 0.78f * tipGlow) * (0.4f + 0.6f * v);
-                            Color c = HueGradient(pal.HueA + hueDrift, pal.HueB + hueDrift, ang01, _neonSaturation, _neonValue);
+                            Color c = Color.Lerp(Color.red, Color.white, Mathf.PingPong(ang01 * 2f + time * 0.5f, 1f));
                             outC = Color.Lerp(outC, c, a);
                         }
                     }
@@ -714,7 +714,7 @@ namespace Laps.Authoring
                     {
                         float d = Mathf.Abs(r - kickR);
                         float ring = Mathf.SmoothStep(1f, 0f, d / Mathf.Max(0.0001f, _ringThickness * 0.85f));
-                        Color ringC = HueGradient(pal.HueA, pal.HueB, 0.5f, pal.Sat * 0.3f, pal.Val);
+                        Color ringC = Color.Lerp(Color.red, Color.white, kickRing);
                         outC = Color.Lerp(outC, ringC, ring * kickRing);
                     }
 
@@ -729,7 +729,7 @@ namespace Laps.Authoring
             var pal = GetStylePalette(VisualEffect.SpiralFlow);
             float half = Mathf.Max(_w, _h) * 0.5f;
             float cx = (_w - 1) * 0.5f;
-            float cy = (_h - 1) * 0.5f;
+            float cy = (_h - 1) * 0.35f; // Décalé vers le haut
             float invHalf = 1f / Mathf.Max(1f, half);
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.5f);
@@ -767,12 +767,8 @@ namespace Laps.Authoring
                     float a = veil * band * (0.25f + 0.55f * pump + 0.35f * v + 0.25f * voice);
                     a = Mathf.Clamp01(a);
 
-                    Color c = HueGradient(
-                        pal.HueA + time * _hueSpeed * 0.25f,
-                        pal.HueB + time * _hueSpeed * 0.15f,
-                        ang01 * 0.6f + r * 0.25f,
-                        pal.Sat,
-                        pal.Val);
+                    float blend = Mathf.PingPong(ang01 * 0.6f + r * 0.25f + time * _hueSpeed, 1f);
+                    Color c = Color.Lerp(Color.red, Color.white, blend);
                     Color outC = Color.Lerp(_state[idx], c, a);
 
                     _state[idx] = (Color32)outC;
@@ -786,7 +782,7 @@ namespace Laps.Authoring
             var pal = GetStylePalette(VisualEffect.PulseRings);
             float half = Mathf.Max(_w, _h) * 0.5f;
             float cx = (_w - 1) * 0.5f;
-            float cy = (_h - 1) * 0.5f;
+            float cy = (_h - 1) * 0.35f; // Décalé vers le haut
             float invHalf = 1f / Mathf.Max(1f, half);
             float time = Time.time;
             float pump = Mathf.Pow(bass01, 0.5f);
@@ -827,12 +823,8 @@ namespace Laps.Authoring
                     }
                     glow = Mathf.Clamp01(glow * 0.85f);
 
-                    Color c = HueGradient(
-                        pal.HueA + time * _hueSpeed * 0.2f,
-                        pal.HueB + time * _hueSpeed * 0.1f,
-                        ang01 * 0.4f + pump * 0.2f,
-                        _neonSaturation * 0.9f,
-                        _neonValue);
+                    float blend = Mathf.PingPong(ang01 * 0.4f + pump * 0.2f + time * _hueSpeed, 1f);
+                    Color c = Color.Lerp(Color.red, Color.white, blend);
                     Color outC = Color.Lerp(_state[idx], c, glow);
 
                     _state[idx] = (Color32)outC;

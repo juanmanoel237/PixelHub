@@ -54,6 +54,8 @@ public class PixelHubBootstrapper : MonoBehaviour
             gameObject.AddComponent<EHubControlPanel>();
         if (GetComponent<RouterConfigPanel>() == null)
             gameObject.AddComponent<RouterConfigPanel>();
+        if (GetComponent<RouterDebugPanel>() == null)
+            gameObject.AddComponent<RouterDebugPanel>();
 
         _previewOverlay = GetComponent<LedPreviewOverlay>() ?? gameObject.AddComponent<LedPreviewOverlay>();
         _previewOverlay.Init(_routingEngine);
@@ -80,6 +82,46 @@ public class PixelHubBootstrapper : MonoBehaviour
             var confettiOverlayGO = new GameObject("ConfettiOverlayRenderer");
             confettiOverlayGO.transform.SetParent(transform);
             confettiOverlayGO.AddComponent<Laps.Authoring.ConfettiOverlayRenderer>();
+        }
+
+        // Troisième overlay : neige
+        // Si un NeigeOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.NeigeOverlayRenderer>(true) == null)
+        {
+            var neigeOverlayGO = new GameObject("NeigeOverlayRenderer");
+            neigeOverlayGO.transform.SetParent(transform);
+            neigeOverlayGO.AddComponent<Laps.Authoring.NeigeOverlayRenderer>();
+        }
+
+        // Quatrième overlay : maisons
+        // Si un MaisonsOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.MaisonsOverlayRenderer>(true) == null)
+        {
+            var maisonsOverlayGO = new GameObject("MaisonsOverlayRenderer");
+            maisonsOverlayGO.transform.SetParent(transform);
+            maisonsOverlayGO.AddComponent<Laps.Authoring.MaisonsOverlayRenderer>();
+        }
+
+        // Cinquième overlay : flash
+        // Si un FlashOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.FlashOverlayRenderer>(true) == null)
+        {
+            var flashOverlayGO = new GameObject("FlashOverlayRenderer");
+            flashOverlayGO.transform.SetParent(transform);
+            flashOverlayGO.AddComponent<Laps.Authoring.FlashOverlayRenderer>();
+        }
+
+        // Sixième overlay : éclat
+        // Si un EclatOverlayRenderer existe déjà dans la scène (objet persistant pour l'Activation Track),
+        // on ne le recrée pas.
+        if (FindObjectOfType<Laps.Authoring.EclatOverlayRenderer>(true) == null)
+        {
+            var eclatOverlayGO = new GameObject("EclatOverlayRenderer");
+            eclatOverlayGO.transform.SetParent(transform);
+            eclatOverlayGO.AddComponent<Laps.Authoring.EclatOverlayRenderer>();
         }
     }
 
@@ -147,7 +189,8 @@ public class PixelHubBootstrapper : MonoBehaviour
         Debug.Log("[PixelHubBootstrapper] → Onglet GAME pour voir l'aperçu. Touches : T=timeline | D=debug | E=eHuB | A=audio | V=video");
         Debug.Log("[PixelHubBootstrapper] → Tests couleur : 1=1ère LED | R/G/B | 0=off (Ctrl+1..4 = lyre DMX)");
         Debug.Log("[PixelHubBootstrapper] → eHub : 1 HÔTE (mur LED) + clients (télécommande) — panneau bas.");
-        Debug.Log("[PixelHubBootstrapper] → F6 = panneau config routeur (IP contrôleurs BC216).");
+        Debug.Log("[PixelHubBootstrapper] → I = panneau config routeur (IP contrôleurs BC216).");
+        Debug.Log("[PixelHubBootstrapper] → U = debug DMX (univers, canaux, entités eHuB).");
     }
 
     private void Update()
@@ -190,6 +233,7 @@ public class PixelHubBootstrapper : MonoBehaviour
             RequestTestStaticProjector();
         else if (Input.GetKeyDown(KeyCode.F5))
             RequestBlackOutLyres();
+        // I / U : gérés par RouterConfigPanel / RouterDebugPanel (OnGUI, Mac+PC)
     }
 
     /// <summary>Local + sync eHub (clavier ou boutons UI).</summary>
