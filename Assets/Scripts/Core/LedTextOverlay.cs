@@ -32,6 +32,7 @@ namespace Laps.Core
             public float Lifetime;
             public Color32 Color;
             public int Scale;
+            public bool IsPulse;
         }
 
         private static readonly List<FlyingLetter> _letters = new List<FlyingLetter>();
@@ -59,43 +60,65 @@ namespace Laps.Core
             new Color(0.1f, 1f, 0.45f),     // K — Vert néon
         };
 
-        // Trajectoire prédéfinie par lettre
+        // Trajectoire prédéfinie par lettre (pour celles qui défilent)
         private static readonly FlyDirection[] LetterDirections = new FlyDirection[]
         {
-            FlyDirection.LeftToRight,                   // D
-            FlyDirection.DiagTopLeftToBottomRight,       // A
-            FlyDirection.TopToBottom,                    // N
-            FlyDirection.RightToLeft,                    // E
-            FlyDirection.DiagBottomLeftToTopRight,       // M
-            FlyDirection.DiagTopRightToBottomLeft,       // R
-            FlyDirection.BottomToTop,                    // K
+            FlyDirection.LeftToRight,                   // D — défile
+            FlyDirection.DiagTopLeftToBottomRight,       // A — (non utilisé, pulse)
+            FlyDirection.TopToBottom,                    // N — défile
+            FlyDirection.RightToLeft,                    // E — (non utilisé, pulse)
+            FlyDirection.DiagBottomLeftToTopRight,       // M — défile
+            FlyDirection.DiagTopRightToBottomLeft,       // R — (non utilisé, pulse)
+            FlyDirection.BottomToTop,                    // K — défile
         };
 
-        private const float FLIGHT_DURATION = 1.8f;
-        // La taille des lettres volantes (réduite pour qu'elles prennent moins de place)
+        // true = pulse au centre, false = défile à travers l'écran
+        private static readonly bool[] LetterIsPulse = new bool[]
+        {
+            false,  // D — défile
+            true,   // A — pulse
+            false,  // N — défile
+            true,   // E — pulse
+            false,  // M — défile
+            true,   // R — pulse
+            false,  // K — défile
+        };
+
+        private const float FLY_DURATION = 1.8f;
+        private const float PULSE_DURATION = 2.0f;
         private const int LETTER_SCALE = 4;
 
-        /// <summary>Lance une lettre volante sur la grille.</summary>
+        /// <summary>Lance une lettre (pulse au centre ou défilement selon la lettre).</summary>
         public static void SpawnLetter(char ch)
         {
             ch = char.ToUpperInvariant(ch);
-            // Lettres valides : D, A, N, E, M, R, K (les 7 touches clavier)
-            // On accepte toutes les 7 touches via GetLetterPreset
 
-            GetLetterPreset(ch, out Color color, out FlyDirection dir);
-            GetStartEnd(dir, out float sx, out float sy, out float ex, out float ey);
+            GetLetterPreset(ch, out Color color, out FlyDirection dir, out bool isPulse);
+
+            float sx, sy, ex, ey;
+            float lifetime;
+
+            if (isPulse)
+            {
+                sx = 0.5f; sy = 0.5f; ex = 0.5f; ey = 0.5f;
+                lifetime = PULSE_DURATION;
+            }
+            else
+            {
+                GetStartEnd(dir, out sx, out sy, out ex, out ey);
+                lifetime = FLY_DURATION;
+            }
 
             _letters.Add(new FlyingLetter
             {
                 Character = ch,
-                StartX = sx,
-                StartY = sy,
-                EndX = ex,
-                EndY = ey,
+                StartX = sx, StartY = sy,
+                EndX = ex, EndY = ey,
                 Age = 0f,
-                Lifetime = FLIGHT_DURATION,
+                Lifetime = lifetime,
                 Color = (Color32)color,
-                Scale = LETTER_SCALE
+                Scale = LETTER_SCALE,
+                IsPulse = isPulse
             });
         }
 
@@ -109,7 +132,7 @@ namespace Laps.Core
 
         public static bool IsDanmarkComplete => _danmarkComplete;
 
-        /// <summary>Met à jour les lettres en vol (appelé depuis le main thread).</summary>
+        /// <summary>Met à jour les lettres (appelé depuis le main thread).</summary>
         public static void Tick(float deltaTime)
         {
             float dt = Mathf.Max(deltaTime, 0.0001f);
@@ -136,37 +159,53 @@ namespace Laps.Core
         {
             if (buffer == null || width <= 0 || height <= 0) return;
 
-            // 1. Lettres en vol
+            // 1. Lettres (pulse au centre ou défilement)
             foreach (var l in _letters)
             {
                 if (l.Age >= l.Lifetime) continue;
 
                 float t = l.Age / l.Lifetime;
-
-                // Fade in/out
-                float alpha = 1f;
-                if (t < 0.12f)
-                    alpha = t / 0.12f;
-                else if (t > 0.85f)
-                    alpha = (1f - t) / 0.15f;
-                alpha = Mathf.Clamp01(alpha);
-
-                // Position interpolée
-                float nx = Mathf.Lerp(l.StartX, l.EndX, t);
-                float ny = Mathf.Lerp(l.StartY, l.EndY, t);
-
-                // Convertir en position pixel (coin top-left du glyphe)
+                float alpha;
+                int px, py;
                 int glyphW = 5 * l.Scale;
                 int glyphH = 7 * l.Scale;
-                int px = Mathf.RoundToInt(nx * width) - glyphW / 2;
-                int py = Mathf.RoundToInt(ny * height) - glyphH / 2;
 
-                // Couleur avec alpha
+                if (l.IsPulse)
+                {
+                    // Pulse : fade in doux → maintien → fade out doux
+                    if (t < 0.3f)
+                        alpha = t / 0.3f;
+                    else if (t < 0.7f)
+                        alpha = 1f;
+                    else
+                        alpha = (1f - t) / 0.3f;
+                    alpha = Mathf.Clamp01(alpha);
+                    alpha = alpha * alpha * (3f - 2f * alpha); // courbe douce
+
+                    px = (width - glyphW) / 2;
+                    py = (height - glyphH) / 2;
+                }
+                else
+                {
+                    // Fly : traverse l'écran avec fade in/out rapide
+                    if (t < 0.12f)
+                        alpha = t / 0.12f;
+                    else if (t > 0.85f)
+                        alpha = (1f - t) / 0.15f;
+                    else
+                        alpha = 1f;
+                    alpha = Mathf.Clamp01(alpha);
+
+                    float nx = Mathf.Lerp(l.StartX, l.EndX, t);
+                    float ny = Mathf.Lerp(l.StartY, l.EndY, t);
+                    px = Mathf.RoundToInt(nx * width) - glyphW / 2;
+                    py = Mathf.RoundToInt(ny * height) - glyphH / 2;
+                }
+
                 Color col = l.Color;
                 col.a = alpha;
                 Color32 fg = (Color32)(col * alpha);
 
-                // Rendre la lettre dans un buffer temporaire puis composer
                 RenderCharAt(buffer, width, height, l.Character, l.Scale, fg, px, py);
             }
 
@@ -178,12 +217,12 @@ namespace Laps.Core
                 float shimmer = 0.85f + 0.15f * Mathf.Sin(Time.time * 4f);
 
                 // Couleur dorée qui brille
-                Color gold = new Color(1f, 0.85f, 0.2f) * shimmer * fadeIn;
+                Color red = new Color(1f, 0.1f, 0.1f) * shimmer * fadeIn;
 
                 int scale = Mathf.Max(1, Mathf.Min(width / (8 * 6), height / (7 * 4)));
                 int originY = height - 7 * scale - Mathf.Max(1, height / 12);
 
-                RenderTextAtY(buffer, width, height, "danemark", scale, (Color32)gold, originY);
+                RenderTextAtY(buffer, width, height, "danemark", scale, (Color32)red, originY);
             }
         }
 
@@ -206,8 +245,7 @@ namespace Laps.Core
 
                     for (int sy = 0; sy < scale; sy++)
                     {
-                        // Unity commence Y=0 en bas. On inverse la ligne (6 - row) pour ne pas avoir la tête en bas.
-                        int py = oy + (6 - row) * scale + sy;
+                        int py = oy + row * scale + sy;
                         if (py < 0 || py >= h) continue;
 
                         for (int sx = 0; sx < scale; sx++)
@@ -285,7 +323,7 @@ namespace Laps.Core
             return null;
         }
 
-        private static void GetLetterPreset(char ch, out Color color, out FlyDirection dir)
+        private static void GetLetterPreset(char ch, out Color color, out FlyDirection dir, out bool isPulse)
         {
             // Mapping : touches D, A, N, E, M, R, K → preset index 0..6
             ch = char.ToUpperInvariant(ch);
@@ -304,6 +342,7 @@ namespace Laps.Core
 
             color = LetterColors[idx];
             dir = LetterDirections[idx];
+            isPulse = LetterIsPulse[idx];
         }
 
         private static void GetStartEnd(FlyDirection dir, out float sx, out float sy, out float ex, out float ey)
