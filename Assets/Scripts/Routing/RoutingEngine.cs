@@ -168,6 +168,8 @@ namespace Laps.Routing
                         MaisonsOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         FlashOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         EclatOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        EclaireDroiteOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
+                        EclaireGaucheOverlayCompositor.CompositeOnto(_writeBuffer, w, h);
                         if (map.flipY) LedBufferTransforms.FlipBufferY(_writeBuffer, w, h);
                         if (map.flipX) LedBufferTransforms.FlipBufferX(_writeBuffer, w, h);
                     }

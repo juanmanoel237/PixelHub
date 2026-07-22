@@ -121,6 +121,22 @@ public class PixelHubBootstrapper : MonoBehaviour
             eclatOverlayGO.transform.SetParent(transform);
             eclatOverlayGO.AddComponent<Laps.Authoring.EclatOverlayRenderer>();
         }
+
+        // Septième overlay : éclair droite
+        if (FindObjectOfType<Laps.Authoring.EclaireDroiteOverlayRenderer>(true) == null)
+        {
+            var eclaireDroiteGO = new GameObject("EclaireDroiteOverlayRenderer");
+            eclaireDroiteGO.transform.SetParent(transform);
+            eclaireDroiteGO.AddComponent<Laps.Authoring.EclaireDroiteOverlayRenderer>();
+        }
+
+        // Huitième overlay : éclair gauche
+        if (FindObjectOfType<Laps.Authoring.EclaireGaucheOverlayRenderer>(true) == null)
+        {
+            var eclaireGaucheGO = new GameObject("EclaireGaucheOverlayRenderer");
+            eclaireGaucheGO.transform.SetParent(transform);
+            eclaireGaucheGO.AddComponent<Laps.Authoring.EclaireGaucheOverlayRenderer>();
+        }
     }
 
     private void Start()
