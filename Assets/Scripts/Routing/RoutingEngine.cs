@@ -17,6 +17,8 @@ namespace Laps.Routing
     /// Il n'accède qu'à Color32[] via IStateProvider.
     ///
     /// Satisfait P2 : Routage ArtNet performant sur thread séparé.
+    /// Double-buffering utilisé pour synchroniser l'état entre le thread principal (Update)
+    /// et le thread de routage (RoutingLoop) sans bloquer.
     /// </summary>
     public class RoutingEngine : MonoBehaviour
     {
@@ -161,6 +163,7 @@ namespace Laps.Routing
             if (_stateProvider is IEntityStateProvider entityProvider)
                 entities = entityProvider.GetEntityState();
 
+            // Verrou pour effectuer le Swap (Double Buffering) rapidement
             lock (_lock)
             {
                 if (state != null)
@@ -214,6 +217,7 @@ namespace Laps.Routing
                 LyreState[] lyres;
                 IReadOnlyList<EntityColor> entities;
 
+                // Récupération atomique (sans bloquer longtemps) du dernier état prêt
                 lock (_lock)
                 {
                     entities = _entitySnapshot;
@@ -250,7 +254,8 @@ namespace Laps.Routing
         }
 
         /// <summary>
-        /// Convertit le snapshot Color32[] en paquets DMX et les envoie.
+        /// Convertit le snapshot Color32[] en paquets DMX par univers et les envoie via Art-Net.
+        /// Appelée depuis le thread de routage.
         /// </summary>
         private void RouteState(Color32[] state, LyreState[] lyres, IReadOnlyList<EntityColor> entities)
         {

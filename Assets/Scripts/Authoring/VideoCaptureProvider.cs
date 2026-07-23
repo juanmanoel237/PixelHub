@@ -8,6 +8,7 @@ namespace Laps.Authoring
     /// Capture le rendu d'une caméra via une RenderTexture et 
     /// convertit les pixels en un tableau de Color32[] de manière asynchrone 
     /// pour ne pas bloquer le thread principal (GPU -> CPU).
+    /// Idéal pour projeter des flux Webcam, NDI ou Spout sur la grille LED physique.
     /// </summary>
     public class VideoCaptureProvider : MonoBehaviour, IStateProvider
     {

@@ -53,6 +53,7 @@ namespace Laps.Authoring
     /// les paramètres, et remplit le tableau Color32[] fourni.
     ///
     /// Satisfait P3 : outil de programmation créative avec ensemble d'outils simples.
+    /// Optimisé (Zéro GC Alloc par frame) pour permettre un routage fluide.
     /// </summary>
     public static class EffectLibrary
     {

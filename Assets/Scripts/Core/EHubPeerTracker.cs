@@ -3,7 +3,11 @@ using System.Collections.Generic;
 
 namespace Laps.Core
 {
-    /// <summary>Suit les postes eHub actifs via messages Hello / trafic.</summary>
+    /// <summary>
+    /// Suit les postes eHub actifs via messages Hello / trafic.
+    /// Permet de détecter la déconnexion ou la perte de signal d'un pair
+    /// grâce à un timeout basé sur le Timestamp local (`_lastSeenMs`).
+    /// </summary>
     public class EHubPeerTracker
     {
         private readonly Dictionary<string, long> _lastSeenMs = new Dictionary<string, long>();

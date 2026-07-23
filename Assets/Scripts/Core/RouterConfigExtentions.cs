@@ -23,7 +23,11 @@ namespace Laps.Core
         public ControllerPatchEntry[] controllerPatch;
     }
 
-    // Extension légère sans casser AppConfig existant: on l’imbrique dans JSON sous "router"
+    /// <summary>
+    /// Extension légère permettant de charger la configuration JSON (router.files, etc.)
+    /// sans casser la structure `AppConfig` existante.
+    /// Utilisé pour le remapping des contrôleurs et la configuration du routeur.
+    /// </summary>
     [Serializable]
     public class ExtendedAppConfig : AppConfig
     {

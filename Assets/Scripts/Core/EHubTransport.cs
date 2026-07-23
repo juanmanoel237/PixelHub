@@ -27,6 +27,9 @@ namespace Laps.Core
     /// <summary>
     /// Transport UDP eHub : mode Hôte (les autres se connectent à vous)
     /// ou mode Client (vous saisissez l'IP de l'hôte).
+    /// Gère la boucle réseau bas niveau, le broadcasting (Beacon) pour la découverte
+    /// et la réception des messages d'état (EHubMessage) via UDP.
+    /// Thread-safe : une thread dédiée 'ReceiveLoop' gère la réception.
     /// </summary>
     public class EHubTransport : IDisposable
     {
@@ -230,6 +233,7 @@ namespace Laps.Core
             }
 
             _running = true;
+            // Lancement du thread dédié à la réception UDP pour ne pas bloquer le thread principal Unity
             if (_thread == null || !_thread.IsAlive)
             {
                 _thread = new Thread(ReceiveLoop)
@@ -241,6 +245,10 @@ namespace Laps.Core
             }
         }
 
+        /// <summary>
+        /// Boucle infinie exécutée sur un thread séparé.
+        /// Attend la réception UDP de manière bloquante (Receive), puis valide et route le message.
+        /// </summary>
         private void ReceiveLoop()
         {
             while (_running)
@@ -248,6 +256,7 @@ namespace Laps.Core
                 try
                 {
                     IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
+                    // Appel bloquant jusqu'à réception de données
                     byte[] data = _listener.Receive(ref remote);
                     if (data == null || data.Length == 0) continue;
 
@@ -342,9 +351,11 @@ namespace Laps.Core
                     if (_role == EHubRole.Host && !string.IsNullOrEmpty(remoteIp))
                         _connectedClients[remoteIp] = NowMs();
 
+                    // Si l'application est Hôte, on relaye directement le message aux autres clients
                     if (_role == EHubRole.Host)
                         RelayToClients(msg, remoteIp);
 
+                    // Mise en file d'attente pour que le thread principal traite le message (via TryDequeue)
                     _incoming.Enqueue(msg);
                     MessagesReceived++;
                     if (msg.type != EHubMessageTypes.Hello &&
@@ -577,7 +588,8 @@ namespace Laps.Core
                 stringArg = helloArg
             };
 
-            // Unicast direct + broadcast (certains Wi-Fi bloquent le trafic direct entre clients)
+            // Unicast direct + broadcast (certains routeurs Wi-Fi bloquent le trafic direct entre clients, 
+            // le broadcast contourne ce problème pour la découverte)
             SendToIp(msg, _hostIp);
             BroadcastPacket(msg);
         }

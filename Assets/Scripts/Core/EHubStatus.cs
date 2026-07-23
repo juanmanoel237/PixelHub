@@ -1,6 +1,9 @@
 namespace Laps.Core
 {
-    /// <summary>État eHub lisible depuis n'importe quel assembly (ex. LedPreviewOverlay).</summary>
+    /// <summary>
+    /// État eHub global, lisible depuis n'importe quel assembly sans couplage fort.
+    /// Permet de savoir si on est Connecté, notre Rôle (Client/Host), et l'IP de l'Hôte.
+    /// </summary>
     public static class EHubStatus
     {
         public static bool Enabled;

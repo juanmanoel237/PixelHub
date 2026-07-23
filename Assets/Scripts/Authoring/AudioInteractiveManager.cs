@@ -22,6 +22,7 @@ namespace Laps.Authoring
     /// <summary>
     /// Gère les interactions audio via le clavier : SFX, Volume Global et Pause.
     /// Les actions sont synchronisées entre postes via eHub (UDP).
+    /// Lit les entrées clavier (Update) et déclenche les sons et feux d'artifice (LedFireworks).
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class AudioInteractiveManager : MonoBehaviour

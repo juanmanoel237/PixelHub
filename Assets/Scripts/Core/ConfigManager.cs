@@ -74,6 +74,7 @@ namespace Laps.Core
     /// <summary>
     /// Charge et sauvegarde la configuration depuis StreamingAssets/config.json.
     /// Recharge le mapping entités depuis CSV (section router.files).
+    /// Gère les événements `OnConfigReloaded` pour permettre le hot-reload de la topologie.
     /// </summary>
     public class ConfigManager : MonoBehaviour
     {
@@ -141,7 +142,8 @@ namespace Laps.Core
         }
 
         /// <summary>
-        /// Modifie l'IP d'un contrôleur, sauvegarde et notifie le routeur (P1).
+        /// Modifie l'IP d'un contrôleur, sauvegarde le fichier config.json et notifie le routeur (P1).
+        /// Essentiel pour la reconfiguration à chaud depuis l'UI sans relancer l'application.
         /// </summary>
         public void SetControllerIp(int controllerIndex, string ip)
         {

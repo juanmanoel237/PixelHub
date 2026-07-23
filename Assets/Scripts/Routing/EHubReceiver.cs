@@ -167,6 +167,10 @@ namespace Laps.Routing
             }
         }
 
+        /// <summary>
+        /// Parse le message de configuration (type = 1).
+        /// Reconstruit la map des correspondances entre tuples et IDs d'entités réels.
+        /// </summary>
         private void ParseConfig(byte[] payload)
         {
             // Chaque range = 4 ushorts (8 octets)
@@ -195,6 +199,10 @@ namespace Laps.Routing
             }
         }
 
+        /// <summary>
+        /// Parse un payload d'update eHuB (type = 2).
+        /// Extrait les couleurs pour chaque entité, avec ou sans IDs directement dans la trame.
+        /// </summary>
         private void ParseUpdate(byte[] payload, ushort declaredCount)
         {
             // Deux formats possibles rencontrés en pratique:

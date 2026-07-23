@@ -13,6 +13,10 @@ namespace Laps.Core
         public int channel;
     }
 
+    
+    /// <summary>
+    /// Composant EntityMapping : Logique spécifique d'authoring/rendu.
+    /// </summary>
     public class EntityMapping
     {
         private readonly Dictionary<int, EntityAddress> _map = new Dictionary<int, EntityAddress>(capacity: 20000);

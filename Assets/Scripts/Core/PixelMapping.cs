@@ -18,6 +18,7 @@ namespace Laps.Core
     /// Calcule et expose le mapping complet : index LED → adresse DMX.
     /// Satisfait P4 (architecture flexible) : l'authoring n'a besoin que d'un index de pixel,
     /// le mapping physique est entièrement géré ici et rechargé à la volée si la config change.
+    /// Gère les architectures "Matrix2D" standard ou "LapsWall128" spécifiques.
     /// </summary>
     public class PixelMapping
     {
@@ -101,11 +102,11 @@ namespace Laps.Core
                         stripLedIndex = 130 + y;
                     }
 
-                    int universeInStrip = stripLedIndex >= 170 ? 1 : 0; // 0 ou 1
+                    int universeInStrip = stripLedIndex >= 170 ? 1 : 0; // 0 ou 1 (170 LEDs par univers RGB)
                     universe = stripInQuarter * 2 + universeInStrip;    // 0..31 (par contrôleur)
 
-                    int ledIndexInUniverse = stripLedIndex % 170;        // 0..169
-                    channel = ledIndexInUniverse * ChannelsPerLed;       // 0..509
+                    int ledIndexInUniverse = stripLedIndex % 170;        // 0..169 (Index dans l'univers)
+                    channel = ledIndexInUniverse * ChannelsPerLed;       // 0..509 (Canal DMX de départ)
                 }
                 else
                 {
