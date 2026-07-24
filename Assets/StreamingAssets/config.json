@@ -1,82 +1,82 @@
 {
-  "network": {
-    "controllers": [
-      {
-        "ip": "192.168.1.45",
-        "startUniverse": 0,
-        "universeCount": 32
-      },
-      {
-        "ip": "192.168.1.46",
-        "startUniverse": 0,
-        "universeCount": 32
-      },
-      {
-        "ip": "192.168.1.47",
-        "startUniverse": 0,
-        "universeCount": 32
-      },
-      {
-        "ip": "192.168.1.48",
-        "startUniverse": 0,
-        "universeCount": 40
-      }
-    ],
-    "eHubEnabled": true,
-    "eHubPort": 9000,
-    "eHubSessionId": "equipe-pixelhub",
-    "eHubPeers": [],
-    "artNetPort": 6454,
-    "ehubProtocolPort": 9001
-  },
-  "mapping": {
-    "layout": "LapsWall128",
-    "ledCount": 16384,
-    "screenWidth": 128,
-    "screenHeight": 128,
-    "pixelOrder": "RGB",
-    "channelsPerLed": 3,
-    "serpentine": false,
-    "flipY": false,
-    "flipX": false,
-    "strips": [],
-    "lyres": [
-      {
-        "name": "StaticProjector",
-        "controllerIp": "192.168.1.48",
-        "universe": 33,
-        "startChannel": 1
-      },
-      {
-        "name": "MovingHead1",
-        "controllerIp": "192.168.1.48",
-        "universe": 33,
-        "startChannel": 10
-      },
-      {
-        "name": "MovingHead2",
-        "controllerIp": "192.168.1.48",
-        "universe": 33,
-        "startChannel": 30
-      },
-      {
-        "name": "MovingHead3",
-        "controllerIp": "192.168.1.48",
-        "universe": 33,
-        "startChannel": 50
-      },
-      {
-        "name": "MovingHead4",
-        "controllerIp": "192.168.1.48",
-        "universe": 33,
-        "startChannel": 70
-      }
-    ]
-  },
-  "router": {
-    "files": {
-      "entityMappingCsv": "mapping/led_wall_mapping.csv"
+    "network": {
+        "controllers": [
+            {
+                "ip": "192.168.1.45",
+                "startUniverse": 0,
+                "universeCount": 32
+            },
+            {
+                "ip": "192.168.1.46",
+                "startUniverse": 0,
+                "universeCount": 32
+            },
+            {
+                "ip": "192.168.1.47",
+                "startUniverse": 0,
+                "universeCount": 32
+            },
+            {
+                "ip": "192.168.1.48",
+                "startUniverse": 0,
+                "universeCount": 40
+            }
+        ],
+        "eHubEnabled": true,
+        "eHubPort": 9000,
+        "eHubSessionId": "equipe-pixelhub",
+        "eHubPeers": [],
+        "artNetPort": 6454,
+        "ehubProtocolPort": 9001
     },
-    "controllerPatch": []
-  }
+    "mapping": {
+        "layout": "Matrix2D",
+        "ledCount": 4096,
+        "screenWidth": 64,
+        "screenHeight": 64,
+        "pixelOrder": "RGB",
+        "channelsPerLed": 3,
+        "serpentine": false,
+        "flipY": false,
+        "flipX": false,
+        "strips": [],
+        "lyres": [
+            {
+                "name": "StaticProjector",
+                "controllerIp": "192.168.1.48",
+                "universe": 33,
+                "startChannel": 1
+            },
+            {
+                "name": "MovingHead1",
+                "controllerIp": "192.168.1.48",
+                "universe": 33,
+                "startChannel": 10
+            },
+            {
+                "name": "MovingHead2",
+                "controllerIp": "192.168.1.48",
+                "universe": 33,
+                "startChannel": 30
+            },
+            {
+                "name": "MovingHead3",
+                "controllerIp": "192.168.1.48",
+                "universe": 33,
+                "startChannel": 50
+            },
+            {
+                "name": "MovingHead4",
+                "controllerIp": "192.168.1.48",
+                "universe": 33,
+                "startChannel": 70
+            }
+        ]
+    },
+    "router": {
+        "files": {
+            "entityMappingCsv": "mapping/led_wall_mapping.csv"
+        },
+        "controllerPatch": []
+    }
 }

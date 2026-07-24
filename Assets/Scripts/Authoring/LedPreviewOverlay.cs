@@ -13,8 +13,11 @@ namespace Laps.Authoring
         private IStateProvider _provider;
         private RoutingEngine _routingEngine;
         private Texture2D _previewTexture;
+        private Color[] _previewPixels;
         private int _screenWidth;
         private int _screenHeight;
+        private int _previewDispW;
+        private int _previewDispH;
         private string _modeLabel = "—";
         private float _refreshTimer;
 
@@ -24,6 +27,8 @@ namespace Laps.Authoring
         // Stickmen toujours visibles dans l'aperçu LED (luma-key).
         private VideoOverlayRenderer _videoOverlay;
         private bool _showCombatOverlay = true;
+
+        private const int PreviewMax = 420;
 
         public void Init(RoutingEngine routing)
         {
@@ -62,11 +67,18 @@ namespace Laps.Authoring
         private void InitBuffers()
         {
             if (ConfigManager.Config == null) return;
-            _screenWidth = ConfigManager.Config.mapping.screenWidth;
-            _screenHeight = ConfigManager.Config.mapping.screenHeight;
+            _screenWidth = Mathf.Max(1, ConfigManager.Config.mapping.screenWidth);
+            _screenHeight = Mathf.Max(1, ConfigManager.Config.mapping.screenHeight);
+
+            float aspect = (float)_screenWidth / _screenHeight;
+            _previewDispW = PreviewMax;
+            _previewDispH = Mathf.Max(1, Mathf.RoundToInt(PreviewMax / aspect));
+
             if (_previewTexture != null) Destroy(_previewTexture);
-            _previewTexture = new Texture2D(_screenWidth, _screenHeight, TextureFormat.RGB24, false);
-            _previewTexture.filterMode = FilterMode.Point;
+            _previewTexture = new Texture2D(_previewDispW, _previewDispH, TextureFormat.RGB24, false);
+            _previewTexture.filterMode = FilterMode.Bilinear;
+            _previewTexture.wrapMode = TextureWrapMode.Clamp;
+            _previewPixels = new Color[_previewDispW * _previewDispH];
         }
 
         private void Update()
@@ -80,7 +92,7 @@ namespace Laps.Authoring
 
         private void RefreshPreview()
         {
-            if (_previewTexture == null) return;
+            if (_previewTexture == null || _previewPixels == null) return;
 
             Color32[] state = null;
             if (_routingEngine != null && _routingEngine.TryGetDisplaySnapshot(out Color32[] routed))
@@ -102,22 +114,21 @@ namespace Laps.Authoring
 
             if (state == null || state.Length == 0) return;
 
-            int pixelCount = Mathf.Min(state.Length, _screenWidth * _screenHeight);
-            var pixels = new Color[pixelCount];
-            // SetPixels commence en bas à gauche : flip Y pour l'affichage GUI.
-            LedBufferTransforms.CopyToTexturePixels(state, pixels, _screenWidth, _screenHeight, flipY: true, flipX: false);
+            // Upscale bilinéaire vers la résolution d'affichage UI (évite la pixellisation).
+            LedBufferTransforms.UpscaleBilinearToTexture(
+                state, _screenWidth, _screenHeight,
+                _previewPixels, _previewDispW, _previewDispH,
+                flipY: true, flipX: false);
 
-            _previewTexture.SetPixels(pixels);
+            _previewTexture.SetPixels(_previewPixels);
             _previewTexture.Apply();
         }
 
         private void OnGUI()
         {
             const int margin = 10;
-            const int previewMax = 420;
-            float aspect = _screenHeight > 0 ? (float)_screenWidth / _screenHeight : 1f;
-            int previewW = previewMax;
-            int previewH = Mathf.RoundToInt(previewMax / aspect);
+            int previewW = _previewDispW > 0 ? _previewDispW : PreviewMax;
+            int previewH = _previewDispH > 0 ? _previewDispH : PreviewMax;
 
             GUI.Box(new Rect(margin, margin, 280, 200), "PixelHub — envoi Art-Net");
 

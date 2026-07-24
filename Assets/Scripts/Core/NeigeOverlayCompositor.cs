@@ -61,17 +61,17 @@ namespace Laps.Core
             for (int y = 0; y < drawH; y++)
             {
                 // Lecture normale (SetFrame a déjà inversé le readback GPU)
-                int sy = y * _videoHeight / drawH;
+                float sy = (y + 0.5f) * _videoHeight / drawH - 0.5f;
                 int by = offsetY + y;
                 if (by < 0 || by >= screenHeight) continue;
 
                 for (int x = 0; x < drawW; x++)
                 {
-                    int sx = x * _videoWidth / drawW;
+                    float sx = (x + 0.5f) * _videoWidth / drawW - 0.5f;
                     int bx = offsetX + x;
                     if (bx < 0 || bx >= screenWidth) continue;
 
-                    Color32 src = _pixels[sy * _videoWidth + sx];
+                    Color32 src = LedBufferTransforms.SampleBilinear32(_pixels, _videoWidth, _videoHeight, sx, sy);
                     float luma = (0.2126f * src.r + 0.7152f * src.g + 0.0722f * src.b) / 255f;
                     float alpha = Mathf.SmoothStep(LumaThreshold, LumaThreshold + LumaSoftness,
                                                    Mathf.Clamp01(luma * LumaBoost)) * (src.a / 255f);

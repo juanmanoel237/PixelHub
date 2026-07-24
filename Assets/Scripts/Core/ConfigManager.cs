@@ -191,6 +191,41 @@ namespace Laps.Core
             return true;
         }
 
+        /// <summary>
+        /// Redimensionne le buffer LED (largeur × hauteur), met à jour ledCount,
+        /// sauvegarde et notifie tous les systèmes (aperçu, effets, routage).
+        /// </summary>
+        public bool SetScreenSize(int width, int height)
+        {
+            if (Config?.mapping == null)
+                return false;
+
+            width = Mathf.Clamp(width, 1, 512);
+            height = Mathf.Clamp(height, 1, 512);
+
+            var mapping = Config.mapping;
+            if (mapping.screenWidth == width && mapping.screenHeight == height)
+                return true;
+
+            mapping.screenWidth = width;
+            mapping.screenHeight = height;
+            mapping.ledCount = width * height;
+
+            // LapsWall128 est câblé en 128×128 : hors de cette taille, bascule Matrix2D.
+            if (!string.IsNullOrEmpty(mapping.layout) &&
+                mapping.layout.Trim().ToLowerInvariant() == "lapswall128" &&
+                (width != 128 || height != 128))
+            {
+                mapping.layout = "Matrix2D";
+                Debug.LogWarning("[ConfigManager] Layout LapsWall128 réservé au 128×128 → Matrix2D.");
+            }
+
+            SaveConfig();
+            Debug.Log($"[ConfigManager] Taille écran → {width}×{height} ({mapping.ledCount} LEDs), layout={mapping.layout}");
+            OnConfigReloaded?.Invoke();
+            return true;
+        }
+
         private void LoadEntityMapping()
         {
             EntityMappingCsvPath = null;

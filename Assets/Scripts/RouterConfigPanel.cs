@@ -10,6 +10,8 @@ public class RouterConfigPanel : MonoBehaviour
     private ConfigManager _configManager;
     private bool _show;
     private string[] _ipFields;
+    private string _widthField = "128";
+    private string _heightField = "128";
     private string _feedback = "";
     private float _feedbackUntil;
 
@@ -44,14 +46,23 @@ public class RouterConfigPanel : MonoBehaviour
     private void SyncFieldsFromConfig()
     {
         var cfg = ConfigManager.Config;
-        if (cfg?.network?.controllers == null) return;
+        if (cfg == null) return;
 
-        int n = cfg.network.controllers.Length;
-        if (_ipFields == null || _ipFields.Length != n)
-            _ipFields = new string[n];
+        if (cfg.network?.controllers != null)
+        {
+            int n = cfg.network.controllers.Length;
+            if (_ipFields == null || _ipFields.Length != n)
+                _ipFields = new string[n];
 
-        for (int i = 0; i < n; i++)
-            _ipFields[i] = cfg.network.controllers[i].ip ?? "";
+            for (int i = 0; i < n; i++)
+                _ipFields[i] = cfg.network.controllers[i].ip ?? "";
+        }
+
+        if (cfg.mapping != null)
+        {
+            _widthField = (cfg.mapping.screenWidth > 0 ? cfg.mapping.screenWidth : 128).ToString();
+            _heightField = (cfg.mapping.screenHeight > 0 ? cfg.mapping.screenHeight : 128).ToString();
+        }
     }
 
     private void OnGUI()
@@ -76,7 +87,7 @@ public class RouterConfigPanel : MonoBehaviour
 
         const int panelW = 300;
         const int margin = 10;
-        int panelH = 340 + (ConfigManager.Config?.network?.controllers?.Length ?? 0) * 22;
+        int panelH = 420 + (ConfigManager.Config?.network?.controllers?.Length ?? 0) * 22;
         float x = (Screen.width - panelW) * 0.5f;
         float y = (Screen.height - panelH) * 0.5f;
 
@@ -94,6 +105,8 @@ public class RouterConfigPanel : MonoBehaviour
         DrawIpFields(innerX, ref lineY, innerW);
         lineY += 8;
         DrawOrientationToggles(innerX, ref lineY, innerW);
+        lineY += 8;
+        DrawScreenSizeFields(innerX, ref lineY, innerW);
         lineY += 8;
         DrawButtons(innerX, ref lineY, innerW);
 
@@ -172,6 +185,59 @@ public class RouterConfigPanel : MonoBehaviour
             _configManager?.SaveConfig();
             ShowFeedback($"Orientation → flipY={cfg.flipY}, flipX={cfg.flipX}");
         }
+    }
+
+    private void DrawScreenSizeFields(float x, ref float y, float w)
+    {
+        if (ConfigManager.Config?.mapping == null) return;
+
+        GUI.Label(new Rect(x, y, w, 18), "Taille affichage LED (Width × Height) :");
+        y += 20;
+
+        float half = (w - 6) * 0.5f;
+        GUI.Label(new Rect(x, y, 52, 20), "Width");
+        _widthField = GUI.TextField(new Rect(x + 52, y, half - 52, 20), _widthField);
+        GUI.Label(new Rect(x + half + 6, y, 52, 20), "Height");
+        _heightField = GUI.TextField(new Rect(x + half + 58, y, half - 52, 20), _heightField);
+        y += 24;
+
+        if (GUI.Button(new Rect(x, y, w, 26), "Appliquer la taille"))
+            ApplyScreenSize();
+        y += 28;
+
+        GUI.Label(new Rect(x, y, w, 18), "Tout le projet se projette sur cette taille.");
+        y += 18;
+    }
+
+    private void ApplyScreenSize()
+    {
+        if (_configManager == null)
+        {
+            ShowFeedback("ConfigManager introuvable.");
+            return;
+        }
+
+        if (!int.TryParse(_widthField?.Trim(), out int width) ||
+            !int.TryParse(_heightField?.Trim(), out int height))
+        {
+            ShowFeedback("Width / Height invalides (entiers requis).");
+            return;
+        }
+
+        if (width < 1 || height < 1 || width > 512 || height > 512)
+        {
+            ShowFeedback("Taille hors limites (1–512).");
+            return;
+        }
+
+        if (_configManager.SetScreenSize(width, height))
+        {
+            SyncFieldsFromConfig();
+            var cfg = ConfigManager.Config.mapping;
+            ShowFeedback($"Taille → {cfg.screenWidth}×{cfg.screenHeight} ({cfg.ledCount} LEDs)");
+        }
+        else
+            ShowFeedback("Erreur : impossible d'appliquer la taille.");
     }
 
     private void DrawButtons(float x, ref float y, float w)
